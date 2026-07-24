@@ -1,0 +1,447 @@
+openapi: 3.0.3
+info:
+  title: Shipment Management API
+  description: >
+    Covers Shipment, CourierShipment, ShipmentJourney, TransportLeg,
+    ShipmentIndicator, and Party-role associations, per ER Diagram v1.1
+    and Bounded Context #1 (Shipment Management, incl. Journey/Leg/Tracking/
+    Manifest-Association/Milestone sub-contexts, Day 5).
+  version: "1.0"
+servers:
+  - url: /api/v1
+
+paths:
+  /shipments:
+    get:
+      summary: List shipments (paginated, filterable) — implements PRD FR-004 Shipment Search
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema: { type: string }
+          description: Comma-separated CurrentStatus values (OR filter)
+        - name: shipmentNumber
+          in: query
+          schema: { type: string }
+        - name: mawbBlNumber
+          in: query
+          schema: { type: string }
+        - name: importerPartyId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: createdAfter
+          in: query
+          schema: { type: string, format: date-time }
+        - name: createdBefore
+          in: query
+          schema: { type: string, format: date-time }
+        - name: sortBy
+          in: query
+          schema: { type: string, default: createdAt }
+        - name: sortDirection
+          in: query
+          schema: { type: string, enum: [asc, desc], default: desc }
+      responses:
+        '200':
+          description: Paginated shipment list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Shipment' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+    post:
+      summary: Create a shipment (FR-001 — typically system-invoked on download, manual entry also supported)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShipmentCreateRequest' }
+      responses:
+        '201':
+          description: Shipment created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Shipment' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /shipments/{shipmentId}:
+    parameters:
+      - $ref: '#/components/parameters/ShipmentId'
+    get:
+      summary: Get a shipment by ID
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Shipment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: Full update of editable shipment fields (FR-003; restricted fields rejected post-submission)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShipmentUpdateRequest' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Shipment' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409':
+          description: Conflict — field is restricted post-submission (BR-SHP-006, requires amendment workflow)
+
+  /shipments/{shipmentId}/journey:
+    parameters:
+      - $ref: '#/components/parameters/ShipmentId'
+    get:
+      summary: Get the shipment's journey and its transport legs (multimodal model, ER v1.1)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShipmentJourney' }
+
+  /shipments/{shipmentId}/journey/legs:
+    parameters:
+      - $ref: '#/components/parameters/ShipmentId'
+    get:
+      summary: List transport legs for this shipment's journey, ordered by LegNumber
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TransportLeg' }
+    post:
+      summary: Add a transport leg to the journey (internal/ops use — not typically end-user facing)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransportLegCreateRequest' }
+      responses:
+        '201':
+          description: Leg added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransportLeg' }
+
+  /shipments/{shipmentId}/commodities:
+    parameters:
+      - $ref: '#/components/parameters/ShipmentId'
+    get:
+      summary: List commodity lines for this shipment
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Commodity' }
+    post:
+      summary: Add a commodity line (FR-COM-001)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommodityCreateRequest' }
+      responses:
+        '201':
+          description: Commodity created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Commodity' }
+
+  /shipments/{shipmentId}/indicators:
+    parameters:
+      - $ref: '#/components/parameters/ShipmentId'
+    get:
+      summary: List shipment indicators (auto + manual, per PRD Ch.2.9)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ShipmentIndicator' }
+    post:
+      summary: Manually add a shipment indicator (audited — FR-005)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [indicatorCode, reason]
+              properties:
+                indicatorCode: { type: string }
+                reason: { type: string }
+      responses:
+        '201':
+          description: Indicator added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShipmentIndicator' }
+
+  /courier-shipments:
+    get:
+      summary: List courier shipments (first-class bounded context #16, Day 1)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paginated courier shipment list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CourierShipment' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+    post:
+      summary: Create a courier shipment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CourierShipmentCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierShipment' }
+
+  /courier-shipments/{courierShipmentId}:
+    parameters:
+      - name: courierShipmentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Get a courier shipment by ID
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierShipment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  parameters:
+    ShipmentId:
+      name: shipmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, default: 1, minimum: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, default: 50, maximum: 500 }
+
+  responses:
+    ValidationError:
+      description: Validation failed (RFC 7807 Problem Details, per API Standards v1.0 Section 6)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalCount: { type: integer }
+        totalPages: { type: integer }
+
+    ProblemDetails:
+      type: object
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlationId: { type: string, format: uuid }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              code: { type: string, description: "Maps to PRD Business Rule IDs, e.g. BR-SHP-003" }
+              message: { type: string }
+
+    Shipment:
+      type: object
+      description: Core entity per ER Diagram v1.1 Section 4.1 (Day 2, revised Multimodal Integration)
+      properties:
+        shipmentId: { type: string, format: uuid }
+        shipmentNumber: { type: string }
+        shipmentDirection: { type: string, enum: [Import, Export, Domestic, CrossBorder] }
+        journeyId: { type: string, format: uuid }
+        currentLegId: { type: string, format: uuid, nullable: true }
+        currentStatus:
+          type: string
+          enum: [Draft, Downloaded, Validated, BrokerageRequired, DeclarationCreated, CustomsProcessing, Released, Completed, Archived]
+        originCountry: { type: string }
+        destinationCountry: { type: string }
+        serviceType: { type: string, enum: [Express, Economy, Freight] }
+        createdAt: { type: string, format: date-time }
+
+    ShipmentCreateRequest:
+      type: object
+      required: [shipmentDirection, originCountry, destinationCountry, serviceType]
+      properties:
+        shipmentDirection: { type: string, enum: [Import, Export, Domestic, CrossBorder] }
+        originCountry: { type: string }
+        destinationCountry: { type: string }
+        serviceType: { type: string, enum: [Express, Economy, Freight] }
+        sourceSystem: { type: string }
+
+    ShipmentUpdateRequest:
+      type: object
+      description: Only editable fields per PRD FR-003 (e.g. ETA, contact info, internal notes) — restricted fields rejected with 409
+      properties:
+        eta: { type: string, format: date-time }
+        notes: { type: string }
+
+    CourierShipment:
+      type: object
+      description: First-class bounded context #16 (Day 1); ER v1.1 Section 4.6
+      properties:
+        courierShipmentId: { type: string, format: uuid }
+        courierShipmentNumber: { type: string }
+        courierRegistrationNumber: { type: string }
+        shipmentDirection: { type: string, enum: [Import, Export] }
+        importPurpose: { type: string, enum: [Commercial, Personal, Gift] }
+        importerType: { type: string, enum: [Individual, Business] }
+        declaredValue: { type: number, format: decimal }
+        currency: { type: string }
+        journeyId: { type: string, format: uuid }
+        currentLegId: { type: string, format: uuid, nullable: true }
+        currentStatus: { type: string }
+
+    CourierShipmentCreateRequest:
+      type: object
+      required: [shipmentDirection, importPurpose, importerType, declaredValue, currency]
+      properties:
+        shipmentDirection: { type: string, enum: [Import, Export] }
+        importPurpose: { type: string, enum: [Commercial, Personal, Gift] }
+        importerType: { type: string, enum: [Individual, Business] }
+        declaredValue: { type: number, format: decimal }
+        currency: { type: string }
+
+    ShipmentJourney:
+      type: object
+      description: ER v1.1 Section 4.2 (Multimodal Integration)
+      properties:
+        journeyId: { type: string, format: uuid }
+        shipmentId: { type: string, format: uuid }
+        journeyStatus: { type: string, enum: [Planned, InProgress, Delivered, Exception] }
+        legCount: { type: integer }
+        legs:
+          type: array
+          items: { $ref: '#/components/schemas/TransportLeg' }
+
+    TransportLeg:
+      type: object
+      description: ER v1.1 Section 4.3
+      properties:
+        transportLegId: { type: string, format: uuid }
+        journeyId: { type: string, format: uuid }
+        legNumber: { type: integer }
+        mode: { type: string, enum: [Air, Ocean, Road, Rail, InlandWaterway] }
+        carrier: { type: string }
+        originLocation: { type: string }
+        destinationLocation: { type: string }
+        etd: { type: string, format: date-time, nullable: true }
+        eta: { type: string, format: date-time, nullable: true }
+        atd: { type: string, format: date-time, nullable: true }
+        ata: { type: string, format: date-time, nullable: true }
+        legStatus: { type: string, enum: [Planned, Departed, InTransit, Arrived, CustomsHold, Completed] }
+        customsClearanceRequired: { type: boolean }
+
+    TransportLegCreateRequest:
+      type: object
+      required: [legNumber, mode, originLocation, destinationLocation, customsClearanceRequired]
+      properties:
+        legNumber: { type: integer }
+        mode: { type: string, enum: [Air, Ocean, Road, Rail, InlandWaterway] }
+        carrier: { type: string }
+        originLocation: { type: string }
+        destinationLocation: { type: string }
+        customsClearanceRequired: { type: boolean }
+
+    Commodity:
+      type: object
+      description: ER v1.1 / Day 2 Section 5
+      properties:
+        commodityId: { type: string, format: uuid }
+        lineNumber: { type: integer }
+        commercialDescription: { type: string }
+        customsDescription: { type: string }
+        itcHsCode: { type: string, description: "8-digit Indian Trade Classification HS code" }
+        tariffVersion: { type: string }
+        countryOfOrigin: { type: string }
+        quantity: { type: number }
+        unitOfMeasure: { type: string }
+        customsValue: { type: number, format: decimal }
+        currency: { type: string }
+        controlledGoodsFlag: { type: boolean }
+        dangerousGoodsFlag: { type: boolean }
+        permitRequired: { type: boolean, nullable: true }
+        dgftLicenseRef: { type: string, nullable: true }
+        version: { type: integer }
+
+    CommodityCreateRequest:
+      type: object
+      required: [commercialDescription, customsDescription, countryOfOrigin, quantity, unitOfMeasure, customsValue, currency]
+      properties:
+        commercialDescription: { type: string }
+        customsDescription: { type: string }
+        itcHsCode: { type: string }
+        countryOfOrigin: { type: string }
+        quantity: { type: number }
+        unitOfMeasure: { type: string }
+        customsValue: { type: number, format: decimal }
+        currency: { type: string }
+
+    ShipmentIndicator:
+      type: object
+      description: ER v1.1 / Day 3 Section 4
+      properties:
+        shipmentIndicatorId: { type: string, format: uuid }
+        indicatorCode: { type: string, enum: [DUT, OGA, FTZ, HFC, DDL, IBG, AEO, DGFTHOLD, RESTRICTEDGOODS] }
+        source: { type: string, enum: [Auto, Manual] }
+        sourceRuleRef: { type: string, format: uuid, nullable: true }
+        addedBy: { type: string, format: uuid, nullable: true }
+        addedAt: { type: string, format: date-time }
+        active: { type: boolean }

@@ -1,0 +1,352 @@
+openapi: 3.0.3
+info:
+  title: Declaration Management API
+  description: >
+    Covers Declaration, DeclarationCommodityLine, Charge, Permit, and the
+    submission/amendment/cancellation lifecycle, per ER Diagram v1.1 and
+    Bounded Context #5 (Declaration Management, Day 1/4).
+  version: "1.0"
+servers:
+  - url: /api/v1
+
+paths:
+  /declarations:
+    get:
+      summary: List declarations (paginated, filterable)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: clearanceType
+          in: query
+          schema: { type: string }
+          description: Comma-separated CT values (OR filter)
+        - name: customsStatus
+          in: query
+          schema: { type: string }
+        - name: shipmentId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: declarationNumber
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paginated declaration list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Declaration' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+
+  /declarations/{declarationId}:
+    parameters:
+      - $ref: '#/components/parameters/DeclarationId'
+    get:
+      summary: Get a declaration by ID (current version)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Declaration' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: >
+        Partial update of a draft declaration (FR-DEC-003). Creates a new
+        DeclarationVersion (FR-DEC-004). Rejected with 409 if the declaration
+        is already submitted — use /amendments instead (FR-DEC-007).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeclarationPatchRequest' }
+      responses:
+        '200':
+          description: Updated (new version created)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Declaration' }
+        '409':
+          description: Declaration already submitted — use the amendment workflow
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+
+  /declarations/{declarationId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/DeclarationId'
+    get:
+      summary: List version history for a declaration (FR-DEC-004 — immutable prior versions)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DeclarationVersion' }
+
+  /declarations/{declarationId}/commodity-lines:
+    parameters:
+      - $ref: '#/components/parameters/DeclarationId'
+    get:
+      summary: List declaration commodity lines (snapshot-at-version, per Day 4 Section 4.1 resolution)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DeclarationCommodityLine' }
+
+  /declarations/{declarationId}/charges:
+    parameters:
+      - $ref: '#/components/parameters/DeclarationId'
+    get:
+      summary: List charges (duty/GST/Cess/brokerage fee) for this declaration, per ER v1.1 Section 2 (Day 3)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Charge' }
+
+  /declarations/{declarationId}/permits:
+    parameters:
+      - $ref: '#/components/parameters/DeclarationId'
+    get:
+      summary: List permits linked to this declaration's commodities (Permit Management, co-deployed with Compliance per Day 1)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Permit' }
+
+  /declarations/{declarationId}/submissions:
+    parameters:
+      - $ref: '#/components/parameters/DeclarationId'
+    post:
+      summary: >
+        Submit the declaration to ICEGATE (FR-DEC-002 validation gate applies:
+        permits Approved, compliance cleared, valid Manifest reference present
+        — per Day 4/5 submission-time Direct Call checks). Synchronous call
+        per API Standards v1.1 Section 2 (internal service-to-service, not
+        through the gateway, for the internal validation calls; this endpoint
+        itself is the external-facing submission trigger).
+      responses:
+        '202':
+          description: Accepted for submission — DeclarationSubmitted event published, response arrives async via CustomsResponseReceived
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubmissionAcceptedResponse' }
+        '422':
+          description: Blocking validation failure (unapproved permit, compliance hold, missing/invalid manifest reference)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+
+  /declarations/{declarationId}/amendments:
+    parameters:
+      - $ref: '#/components/parameters/DeclarationId'
+    post:
+      summary: >
+        Create an amendment (FR-DEC-007). Clones the accepted declaration into
+        a new editable version, preserving linkage to the original.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AmendmentRequest' }
+      responses:
+        '201':
+          description: Amendment declaration created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Declaration' }
+
+  /declarations/{declarationId}/cancellations:
+    parameters:
+      - $ref: '#/components/parameters/DeclarationId'
+    post:
+      summary: Request cancellation (FR-DEC-008) — only permitted pre-release, subject to regulatory approval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '202':
+          description: Cancellation request submitted
+        '409':
+          description: Declaration already released — cancellation not permitted
+
+components:
+  parameters:
+    DeclarationId:
+      name: declarationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, default: 1, minimum: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, default: 50, maximum: 500 }
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalCount: { type: integer }
+        totalPages: { type: integer }
+
+    ProblemDetails:
+      type: object
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlationId: { type: string, format: uuid }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              code: { type: string, description: "Maps to PRD Business Rule IDs, e.g. BR-DEC-004" }
+              message: { type: string }
+
+    Declaration:
+      type: object
+      description: ER Diagram v1.1 Section 4.5 (Day 2/4, revised for Manifest + TransportLeg linkage)
+      properties:
+        declarationId: { type: string, format: uuid }
+        declarationNumber: { type: string, nullable: true, description: "Customs-assigned once submitted" }
+        declarationType:
+          type: string
+          enum: [Import, Export, Transit, Amendment, Cancellation, CourierBillOfEntry, CourierShippingBill]
+        clearanceType: { type: string, description: "CT — set by Segregation Engine" }
+        customsStatus: { type: string, description: "CUS" }
+        ratingStatus: { type: string, description: "RAT" }
+        manifestStatus: { type: string, description: "MAN — derived from linked Manifest.Status (Day 4 Section 3.2)" }
+        customsOffice: { type: string }
+        currency: { type: string }
+        exchangeRate: { type: number, format: decimal }
+        importerPartyId: { type: string, format: uuid }
+        exporterPartyId: { type: string, format: uuid, nullable: true }
+        brokerPartyId: { type: string, format: uuid }
+        shipmentId: { type: string, format: uuid, nullable: true }
+        courierShipmentId: { type: string, format: uuid, nullable: true }
+        transportLegId: { type: string, format: uuid, description: "Leg where customs clearance applies (ER v1.1 Section 4.5)" }
+        manifestId: { type: string, format: uuid, nullable: true }
+        manifestLineNumber: { type: string, nullable: true }
+        version: { type: number, format: decimal }
+        amendmentOfDeclarationId: { type: string, format: uuid, nullable: true }
+        filingDate: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    DeclarationVersion:
+      type: object
+      properties:
+        declarationVersionId: { type: string, format: uuid }
+        declarationId: { type: string, format: uuid }
+        versionNumber: { type: number, format: decimal }
+        changedFields: { type: array, items: { type: string } }
+        changedBy: { type: string, format: uuid }
+        reason: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    DeclarationPatchRequest:
+      type: object
+      description: Only fields editable pre-submission (FR-DEC-003)
+      properties:
+        customsOffice: { type: string }
+        brokerRemarks: { type: string }
+
+    DeclarationCommodityLine:
+      type: object
+      description: Snapshot-at-version join, per Day 4 Section 4.1 resolution
+      properties:
+        declarationCommodityLineId: { type: string, format: uuid }
+        declarationId: { type: string, format: uuid }
+        commodityId: { type: string, format: uuid }
+        commodityVersionSnapshot: { type: integer, description: "Pinned CommodityVersion at filing time" }
+        lineNumber: { type: integer }
+
+    Charge:
+      type: object
+      description: ER v1.1 Section 2 (Day 3)
+      properties:
+        chargeId: { type: string, format: uuid }
+        chargeCode: { type: string, enum: [BCD, IGST, SocialWelfareCess, AntiDumpingDuty, SafeguardDuty, BrokerageFee, Other] }
+        chargeLevel: { type: string, enum: [CommodityLine, DeclarationHeader] }
+        commodityId: { type: string, format: uuid, nullable: true }
+        declarationId: { type: string, format: uuid }
+        calculationMethod: { type: string, enum: [AdValorem, Specific, Compound] }
+        rate: { type: number, format: decimal }
+        baseAmount: { type: number, format: decimal }
+        calculatedAmount: { type: number, format: decimal }
+        currency: { type: string }
+        taxableFlag: { type: boolean }
+        autoManualIndicator: { type: string, enum: [Auto, Manual] }
+        sourceRuleRef: { type: string, format: uuid, nullable: true }
+        version: { type: integer }
+
+    Permit:
+      type: object
+      description: ER v1.1 Section 3 (Day 3)
+      properties:
+        permitId: { type: string, format: uuid }
+        permitNumber: { type: string }
+        permitType: { type: string, enum: [ImportLicense, DGFTAuthorization, EndUseCertificate, HealthCertificate, PlantQuarantine, Other] }
+        issuingAgency: { type: string }
+        issueDate: { type: string, format: date }
+        expiryDate: { type: string, format: date }
+        status: { type: string, enum: [Requested, Pending, Approved, Rejected, Expired] }
+        commodityId: { type: string, format: uuid }
+        dgftLicenseRef: { type: string, nullable: true }
+        approvalBlocksSubmission: { type: boolean }
+
+    SubmissionAcceptedResponse:
+      type: object
+      properties:
+        declarationId: { type: string, format: uuid }
+        submissionTimestamp: { type: string, format: date-time }
+        correlationId: { type: string, format: uuid }
+
+    AmendmentRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string }
+        changedFields:
+          type: object
+          additionalProperties: true
