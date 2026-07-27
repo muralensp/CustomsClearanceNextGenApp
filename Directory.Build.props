@@ -7,4 +7,17 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest</AnalysisLevel>
   </PropertyGroup>
+
+  <!-- Static analysis (Day 12). SonarAnalyzer.CSharp is a standalone Roslyn
+       analyzer package - it does NOT require a SonarCloud/SonarQube server
+       or account, unlike the full Sonar Scanner. It applies Sonar's C#
+       rule set (bug patterns, code smells, security hotspots) directly at
+       build time across every project automatically (solution-wide via
+       this file), giving "SonarQube-equivalent" static analysis without
+       external service setup. A full SonarCloud/SonarQube server
+       integration (with its own dashboard/trend tracking) remains a later,
+       optional upgrade - see adr/0007-static-analysis-and-coverage-gates.md. -->
+  <ItemGroup>
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="9.32.0.97167" PrivateAssets="all" />
+  </ItemGroup>
 </Project>

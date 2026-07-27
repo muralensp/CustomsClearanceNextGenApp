@@ -12,6 +12,12 @@ obj/
 # EF Core
 *.db
 
+# Test results / coverage (Day 12)
+TestResults/
+coverage.cobertura.xml
+coverage.json
+*.trx
+
 # OS
 .DS_Store
 Thumbs.db

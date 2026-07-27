@@ -9,4 +9,11 @@ namespace CustomsClearance.Platform.Common;
 public static class PlaceholderModuleMarker
 {
     public const string ModuleName = "Platform.Common";
+
+    /// <summary>
+    /// Trivial method (not just a const) so the Day 12 coverage pipeline has at
+    /// least one real coverable line/method to measure and report on, instead
+    /// of a vacuous 0-of-0 "100%" for a const-only class.
+    /// </summary>
+    public static string Describe() => $"Module: {ModuleName}";
 }

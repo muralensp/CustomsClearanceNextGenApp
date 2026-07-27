@@ -7,10 +7,26 @@
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+
+    <!-- Coverage gate (Day 12). Platform.Common is a shared library, not
+         business/rules logic or CRUD master data - treated as CRUD-tier
+         (80%) per the classification convention in
+         adr/0007-static-analysis-and-coverage-gates.md until it grows
+         business logic of its own. -->
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>./TestResults/coverage/</CoverletOutput>
+    <Threshold>80</Threshold>
+    <ThresholdType>line</ThresholdType>
+    <ThresholdStat>total</ThresholdStat>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <!-- coverlet.msbuild only (not coverlet.collector) - running both in the
+         same project causes conflicting/empty coverage output, verified
+         locally during Day 12. msbuild is required for threshold
+         enforcement (dotnet test fails the build below threshold). -->
+    <PackageReference Include="coverlet.msbuild" Version="6.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />

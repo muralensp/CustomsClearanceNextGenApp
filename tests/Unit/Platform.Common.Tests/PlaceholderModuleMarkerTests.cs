@@ -14,4 +14,10 @@ public class PlaceholderModuleMarkerTests
     {
         Assert.Equal("Platform.Common", PlaceholderModuleMarker.ModuleName);
     }
+
+    [Fact]
+    public void Describe_ReturnsModuleNameWithPrefix()
+    {
+        Assert.Equal("Module: Platform.Common", PlaceholderModuleMarker.Describe());
+    }
 }

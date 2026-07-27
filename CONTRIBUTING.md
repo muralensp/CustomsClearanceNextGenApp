@@ -69,8 +69,9 @@ Every change goes through a PR, including solo PR-to-self — never merge direct
 A feature is complete only when:
 
 - Requirement implemented and traceable to a PRD chapter / Day-Wise Plan day / ADR / work item
-- Unit tests passing (>=95% coverage for core business/rules logic, >=80% for CRUD-heavy master data, per the Phase-wise Plan v2)
+- Unit tests passing, with the project's coverage threshold (`Threshold`/`ThresholdType`/`ThresholdStat` in its own test `.csproj`, per `adr/0007`) declared and enforced: >=95% for core business/rules logic, >=80% for CRUD-heavy master data / shared platform libraries, per the Phase-wise Plan v2 classification
 - Integration tests passing
+- No new SonarAnalyzer.CSharp warnings introduced without a documented reason (build-time static analysis, per `adr/0007` — not currently a hard CI gate, but reviewed)
 - EF Core migration included and reviewed (rollback considered) — not Flyway, per `adr/0001` and `adr/0003`
 - OpenAPI updated (if REST contract changed)
 - AsyncAPI updated (if event contract changed)
