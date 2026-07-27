@@ -1,0 +1,72 @@
+# Azure DevOps pipeline - PARKED, not active.
+#
+# Per the user's decision (Day 11): start on GitHub Actions (.github/workflows/ci.yml),
+# migrate to Azure DevOps later in the project. This file exists now, alongside the
+# GitHub Actions workflow, to prove the portability claim rather than just asserting it:
+# both files orchestrate the exact same build/scripts/*.sh - only trigger/job syntax
+# differs. When migration happens, this file is activated in Azure DevOps and
+# .github/workflows/ci.yml is retired; no changes to build/scripts/* are needed.
+#
+# Not registered as an active pipeline anywhere yet - kept here for when the migration
+# decision is made.
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Build
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              version: '8.0.x'
+          - bash: build/scripts/build.sh
+            displayName: 'Build'
+          - publish: '$(System.DefaultWorkingDirectory)'
+            artifact: build-output
+
+  - stage: Lint
+    dependsOn: Build
+    jobs:
+      - job: Lint
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              version: '8.0.x'
+          - bash: dotnet restore
+            displayName: 'Restore'
+          - bash: build/scripts/lint.sh
+            displayName: 'Lint'
+
+  - stage: Test
+    dependsOn: Build
+    jobs:
+      - job: Test
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              version: '8.0.x'
+          - bash: build/scripts/build.sh
+            displayName: 'Build'
+          - bash: build/scripts/test.sh
+            displayName: 'Test'
+          - task: PublishTestResults@2
+            condition: always()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/TestResults/*.trx'
