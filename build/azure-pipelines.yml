@@ -9,6 +9,10 @@
 #
 # Not registered as an active pipeline anywhere yet - kept here for when the migration
 # decision is made.
+#
+# Day 13 adds the Containerize stage (docker-compose smoke test) - kept in
+# lockstep with .github/workflows/ci.yml per ADR-0005's discipline requirement.
+# Day 14 adds IntegrationTest and ContractTest stages, likewise kept in lockstep.
 
 trigger:
   branches:
@@ -75,3 +79,48 @@ stages:
             condition: always()
             inputs:
               summaryFileLocation: '**/TestResults/**/coverage.cobertura.xml'
+
+  - stage: IntegrationTest
+    dependsOn: Build
+    jobs:
+      - job: IntegrationTest
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              version: '8.0.x'
+          - bash: build/scripts/integration-test.sh
+            displayName: 'Integration tests (WebApplicationFactory, in-process)'
+          - task: PublishTestResults@2
+            condition: always()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/TestResults/*.trx'
+
+  - stage: Containerize
+    dependsOn: Build
+    jobs:
+      - job: ContainerizeAndSmokeTest
+        steps:
+          - bash: build/scripts/smoke-test.sh
+            displayName: 'Build and smoke-test dev environment (docker compose)'
+          - bash: docker compose logs
+            condition: failed()
+            displayName: 'Dump container logs on failure'
+
+  - stage: ContractTest
+    dependsOn: Build
+    jobs:
+      - job: ContractTest
+        steps:
+          - bash: |
+              mkdir -p TestResults
+              build/scripts/contract-test.sh
+            displayName: 'Build dev environment and run contract tests (Newman)'
+          - bash: docker compose logs
+            condition: failed()
+            displayName: 'Dump container logs on failure'
+          - task: PublishTestResults@2
+            condition: always()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/TestResults/newman-results.xml'

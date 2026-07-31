@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/TestResults/
+**/.vs/
+**/.idea/
+.git/
+.github/
+Phase-1_Architecture_Engineering_Prep/
+docs/
+adr/
+*.docx
+*.md

@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
-# Portable test script - invoked identically by GitHub Actions today and
-# Azure Pipelines later.
+# Portable UNIT test script - invoked identically by GitHub Actions today
+# and Azure Pipelines later.
+#
+# Scoped to tests/Unit/** only (Day 14) - integration tests
+# (tests/Integration/**) run separately via integration-test.sh, so a
+# slower or docker/DB-dependent integration test never blocks or dilutes
+# the fast unit+coverage feedback loop, and so coverage thresholds (which
+# are a unit-test-coverage policy per the Phase-wise Plan v2, not an
+# integration-test policy) are only measured against the layer they're
+# meant to apply to.
 #
 # Coverage collection and threshold enforcement (Day 12) are declared per
 # test project (see each *.csproj's <CollectCoverage>/<Threshold>/...
@@ -21,10 +29,13 @@
 # not a hypothetical concern.
 set -euo pipefail
 
-echo "== Test (with coverage gate) =="
-dotnet test --configuration Release \
-  --logger "trx;LogFileName=test-results.trx" \
-  --results-directory ./TestResults
+echo "== Unit Tests (with coverage gate) =="
+for proj in tests/Unit/*/*.csproj; do
+  echo "--- Testing: $proj ---"
+  dotnet test "$proj" --configuration Release \
+    --logger "trx;LogFileName=$(basename "$proj" .csproj).trx" \
+    --results-directory ./TestResults
+done
 
 echo "== Coverage Report =="
 dotnet tool restore

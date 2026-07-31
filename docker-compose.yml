@@ -1,0 +1,36 @@
+# Day 13 - local/CI "dev environment" definition. This is the environment
+# CI's smoke test (build/scripts/smoke-test.sh) exercises after building the
+# image, and what you can run locally with `docker compose up`.
+#
+# Note: the Api placeholder does not yet connect to PostgreSQL (no EF Core
+# wired up - that's later Phase 0/3 work). The postgres service is included
+# here now because it's part of the ADR-0001 stack and belongs in the "dev
+# environment" definition, not because the Api currently uses it. Don't
+# read its presence as claiming database integration exists yet.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: src/Api/Dockerfile
+    image: customsclearance-api:dev
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=customsclearance
+      - POSTGRES_PASSWORD=devlocalonly
+      - POSTGRES_DB=customsclearance_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-dev-data:

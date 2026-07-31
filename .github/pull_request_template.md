@@ -30,7 +30,10 @@
 <!-- Backward compatibility, performance, security -->
 
 ## Reviewer Checklist
-- [ ] Architecture respected (bounded-context boundaries not violated — see ADR-0003)
+
+Full checklists (formalized Day 15 — see `docs/quality-gates/`): [Gate 1 Architecture](../docs/quality-gates/Gate1_Architecture_Review.md) · [Gate 2 Backend](../docs/quality-gates/Gate2_Backend_Review.md) · [Gate 3 API](../docs/quality-gates/Gate3_API_Review.md) · [Gate 4 Frontend](../docs/quality-gates/Gate4_Frontend_Review.md) · [Gate 5 Release](../docs/quality-gates/Gate5_Release_Review.md). Quick summary for this PR:
+
+- [ ] Architecture respected (bounded-context boundaries not violated — see ADR-0003, ADR-0006)
 - [ ] No circular dependencies between context modules
 - [ ] Logging added where appropriate
 - [ ] Audit events added where appropriate (per PRD audit requirements)

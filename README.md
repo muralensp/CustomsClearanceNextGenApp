@@ -11,8 +11,11 @@ All PRD, phase-level/day-level plans, and Phase -1 deliverables now live in one 
 - **Product Requirements**: `Phase-1_Architecture_Engineering_Prep/CustomsClearance_PRD.docx`
 - **Delivery Plan**: `Phase-1_Architecture_Engineering_Prep/CustomsClearance_Phasewise_DevlopmentPlan_v2.docx` (phase-level), `Phase-1_Architecture_Engineering_Prep/CustomsClearance_India_DayWise_Plan_Phase-1_and_Phase0.docx` (day-level)
 - **Domain Model**: `Phase-1_Architecture_Engineering_Prep/Day1_Bounded_Context_Map_v2.docx` through `Day4_ER_Diagram_v1.0.docx`, plus `Multimodal_Shipment_Journey_Integration_ER_v1.1.docx`, all in that same folder
-- **Architecture Decisions**: `adr/` — start with `adr/0001-technology-stack.md`, `adr/0002-configurable-rules-engine.md`, `adr/0003-repository-branching-delivery-strategy.md`, `adr/0004-security-audit-standards.md`
-- **API Contracts**: `openapi/` (REST), `asyncapi/` (events, populated as each context's events are implemented)
+- **Business Process**: `Phase-1_Architecture_Engineering_Prep/Business_Process_Details.md`
+- **Architecture Decisions**: `adr/` — 0001 stack, 0002 rules engine, 0003 repo/branching, 0004 security/audit, 0005 CI platform, 0006 Clean Architecture adaptation, 0007 static analysis/coverage, 0008 CD pipeline/environments, 0009 test automation
+- **Quality Gate Checklists**: `docs/quality-gates/` — Gate 1 (Architecture) through Gate 5 (Release), used at every phase exit and referenced from the PR template
+- **API Contracts**: `openapi/` (REST), `asyncapi/` (events, populated as each context's events are implemented), `postman/` (contract tests via Newman)
+- **Dev Environment**: `docker-compose.yml` (Api + Postgres) — see `adr/0008` for scope/limits
 - **Work Items**: `docs/WORK-ITEMS.md`
 
 ## Stack

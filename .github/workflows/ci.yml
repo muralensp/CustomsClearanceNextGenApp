@@ -6,6 +6,14 @@ name: CI
 # needed) and coverage gates (per-project thresholds via coverlet.msbuild,
 # enforced inside build/scripts/test.sh - dotnet test fails outright if a
 # project's coverage falls below its own declared threshold).
+# Day 13 adds: a containerize + docker-compose smoke-test stage (CD
+# mechanism only - no persistently hosted "dev environment" yet; that's a
+# Phase 0/Day 21 infra decision, per ADR-0008).
+# Day 14 adds: three isolated test-automation layers - unit (test.sh,
+# scoped to tests/Unit/** only), integration (integration-test.sh, in-process
+# via WebApplicationFactory, scoped to tests/Integration/**), and API
+# contract tests (contract-test.sh, Postman/Newman against the running
+# docker-compose dev environment, black-box over real HTTP).
 #
 # Deliberately thin: all real logic lives in build/scripts/*.sh so this
 # workflow can be re-hosted on Azure Pipelines later (per user decision)
@@ -97,4 +105,65 @@ jobs:
         with:
           name: test-results
           path: TestResults/
+          retention-days: 7
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Integration tests (WebApplicationFactory, in-process)
+        run: bash build/scripts/integration-test.sh
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: TestResults/
+          retention-days: 7
+
+  containerize:
+    name: Containerize + Dev Environment Smoke Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and smoke-test dev environment (docker compose)
+        run: bash build/scripts/smoke-test.sh
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs
+
+  contract-test:
+    name: API Contract Tests (Postman/Newman)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build dev environment and run contract tests (Newman)
+        run: |
+          mkdir -p TestResults
+          bash build/scripts/contract-test.sh
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Upload contract test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-test-results
+          path: TestResults/newman-results.xml
           retention-days: 7

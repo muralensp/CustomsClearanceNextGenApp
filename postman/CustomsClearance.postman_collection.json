@@ -1,0 +1,44 @@
+{
+  "info": {
+    "name": "CustomsClearance API Contract Tests",
+    "description": "Day 14 (Phase -1) API contract test scaffolding. Runs via Newman against the docker-compose dev environment (Day 13). Currently exercises only the placeholder /health endpoint - extend with real requests as each bounded context's endpoints (per openapi/*.yaml, Day 7) are actually implemented, not just designed.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has correlationId-friendly JSON content type', function () {",
+              "    pm.response.to.have.header('Content-Type');",
+              "});",
+              "",
+              "pm.test('Body reports Healthy status', function () {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.status).to.eql('Healthy');",
+              "    pm.expect(body.service).to.eql('CustomsClearance.Api');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
