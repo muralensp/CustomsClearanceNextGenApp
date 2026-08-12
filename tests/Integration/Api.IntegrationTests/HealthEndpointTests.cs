@@ -13,11 +13,11 @@ namespace CustomsClearance.Api.IntegrationTests;
 /// directly. Replace/extend with real endpoint tests as each bounded
 /// context's API is implemented.
 /// </summary>
-public class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public class HealthEndpointTests : IClassFixture<TestApiFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestApiFactory _factory;
 
-    public HealthEndpointTests(WebApplicationFactory<Program> factory)
+    public HealthEndpointTests(TestApiFactory factory)
     {
         _factory = factory;
     }

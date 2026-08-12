@@ -2,11 +2,13 @@
 # CI's smoke test (build/scripts/smoke-test.sh) exercises after building the
 # image, and what you can run locally with `docker compose up`.
 #
-# Note: the Api placeholder does not yet connect to PostgreSQL (no EF Core
-# wired up - that's later Phase 0/3 work). The postgres service is included
-# here now because it's part of the ADR-0001 stack and belongs in the "dev
-# environment" definition, not because the Api currently uses it. Don't
-# read its presence as claiming database integration exists yet.
+# Day 18: the Api's DiagnosticsDbContext (Platform.Persistence) now
+# connects to this postgres service for real, via the ConnectionStrings__
+# DiagnosticsDb override below (Host=postgres, the docker-compose service
+# name/DNS entry - not "localhost", which inside the api container would
+# refer to itself). appsettings.Development.json's own connection string
+# uses Host=localhost for the case of running the Api directly via
+# `dotnet run` against docker-compose's postgres port mapping (5432:5432).
 
 services:
   api:
@@ -18,8 +20,10 @@ services:
       - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DiagnosticsDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
   postgres:
     image: postgres:16-alpine
@@ -31,6 +35,17 @@ services:
       - "5432:5432"
     volumes:
       - postgres-dev-data:/var/lib/postgresql/data
+    # Day 18 fix: without this, "depends_on: - postgres" only waits for the
+    # container to START, not for Postgres to finish its first-time init
+    # (which involves an internal restart cycle) and actually accept
+    # connections. The Api crashed on startup hitting exactly that race -
+    # found via a real smoke-test failure, not assumed. condition:
+    # service_healthy makes the Api wait for this healthcheck to pass first.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U customsclearance -d customsclearance_dev"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
 
 volumes:
   postgres-dev-data:

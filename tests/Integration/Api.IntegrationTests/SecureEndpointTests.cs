@@ -2,8 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
@@ -18,7 +16,7 @@ namespace CustomsClearance.Api.IntegrationTests;
 /// Platform.Security.Tests, using the same dev placeholder key configured
 /// in appsettings.Development.json.
 /// </summary>
-public class SecureEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public class SecureEndpointTests : IClassFixture<TestApiFactory>
 {
     // Matches appsettings.Development.json's Jwt:Key - a public, documented
     // dev-only placeholder (adr/0011), not a real secret.
@@ -26,11 +24,11 @@ public class SecureEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     private const string _devIssuer = "https://dev.customsclearance.india";
     private const string _devAudience = "customsclearance-api-dev";
 
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestApiFactory _factory;
 
-    public SecureEndpointTests(WebApplicationFactory<Program> factory)
+    public SecureEndpointTests(TestApiFactory factory)
     {
-        _factory = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        _factory = factory;
     }
 
     private static string MintToken(string role)

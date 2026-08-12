@@ -1,7 +1,5 @@
 using System.Net;
 using System.Text.Json;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
 namespace CustomsClearance.Api.IntegrationTests;
@@ -13,13 +11,13 @@ namespace CustomsClearance.Api.IntegrationTests;
 /// endpoint - the same mechanism verified manually (curl) during Day 16,
 /// now captured as a repeatable automated test.
 /// </summary>
-public class ErrorHandlingEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public class ErrorHandlingEndpointTests : IClassFixture<TestApiFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestApiFactory _factory;
 
-    public ErrorHandlingEndpointTests(WebApplicationFactory<Program> factory)
+    public ErrorHandlingEndpointTests(TestApiFactory factory)
     {
-        _factory = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        _factory = factory;
     }
 
     [Fact]

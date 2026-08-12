@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- For CorrelationIdAccessor - event envelopes auto-stamp the current
+         correlation ID, per Day6_API_Standards_v1.1.docx Section 3.1
+         (one CorrelationId threads through REST calls, events, and audit
+         records alike). -->
+    <ProjectReference Include="..\Logging\CustomsClearance.Platform.Logging.csproj" />
+  </ItemGroup>
+
+</Project>

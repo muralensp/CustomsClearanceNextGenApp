@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.8" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
   </ItemGroup>
 
@@ -16,6 +17,8 @@
     <ProjectReference Include="..\Platform\ErrorHandling\CustomsClearance.Platform.ErrorHandling.csproj" />
     <ProjectReference Include="..\Platform\Security\CustomsClearance.Platform.Security.csproj" />
     <ProjectReference Include="..\Platform\Audit\CustomsClearance.Platform.Audit.csproj" />
+    <ProjectReference Include="..\Platform\Persistence\CustomsClearance.Platform.Persistence.csproj" />
+    <ProjectReference Include="..\Platform\Messaging\CustomsClearance.Platform.Messaging.csproj" />
   </ItemGroup>
 
 </Project>

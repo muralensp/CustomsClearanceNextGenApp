@@ -7,6 +7,14 @@
 # docker-compose.yml), waits for the Api container to report healthy via
 # /health, then tears everything down. This proves the container actually
 # starts and serves traffic - not just that `docker build` succeeds.
+#
+# Day 18 adds a real PostgreSQL round-trip check (POST + GET
+# /diagnostics/widgets) via Platform.Persistence's DiagnosticsDbContext.
+# This is the one CI job where a real Postgres container is actually
+# available (the WebApplicationFactory-based Integration Tests job, Day
+# 14, is in-process only and has no database) - so this is where the
+# Persistence library's real-database behavior gets CI coverage, not just
+# local manual verification.
 set -euo pipefail
 
 echo "== Building and starting dev environment (docker compose) =="
@@ -20,17 +28,43 @@ trap cleanup EXIT
 
 echo "== Waiting for Api health check =="
 MAX_ATTEMPTS=20
+HEALTHY=false
 for i in $(seq 1 $MAX_ATTEMPTS); do
   if curl -sf http://localhost:8080/health > /tmp/health_response.json 2>/dev/null; then
     echo "Api healthy after ${i} attempt(s):"
     cat /tmp/health_response.json
     echo ""
-    exit 0
+    HEALTHY=true
+    break
   fi
   echo "Attempt ${i}/${MAX_ATTEMPTS}: not ready yet, retrying in 3s..."
   sleep 3
 done
 
-echo "Api did not become healthy after ${MAX_ATTEMPTS} attempts."
-docker compose logs
-exit 1
+if [ "$HEALTHY" != "true" ]; then
+  echo "Api did not become healthy after ${MAX_ATTEMPTS} attempts."
+  docker compose logs
+  exit 1
+fi
+
+echo "== Verifying real PostgreSQL round-trip (Platform.Persistence) =="
+CREATE_RESPONSE=$(curl -sf -X POST "http://localhost:8080/diagnostics/widgets?name=CiSmokeTestWidget")
+echo "Create response: ${CREATE_RESPONSE}"
+
+WIDGET_ID=$(echo "${CREATE_RESPONSE}" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ -z "${WIDGET_ID}" ]; then
+  echo "Failed to extract widget id from create response."
+  docker compose logs api
+  exit 1
+fi
+
+GET_RESPONSE=$(curl -sf "http://localhost:8080/diagnostics/widgets/${WIDGET_ID}")
+echo "Get response: ${GET_RESPONSE}"
+
+if ! echo "${GET_RESPONSE}" | grep -q "CiSmokeTestWidget"; then
+  echo "Widget round-trip failed: created widget was not readable back from PostgreSQL."
+  docker compose logs api
+  exit 1
+fi
+
+echo "PostgreSQL round-trip verified: widget created and read back successfully."
