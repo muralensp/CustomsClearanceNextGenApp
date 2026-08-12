@@ -19,6 +19,11 @@
     <Threshold>80</Threshold>
     <ThresholdType>line</ThresholdType>
     <ThresholdStat>total</ThresholdStat>
+    <!-- Scope coverage to this project's own assembly only (Day 17
+         finding - see Platform.Audit.Tests.csproj for the full
+         explanation). No transitive dependency here yet, applied for
+         consistency. -->
+    <Include>[CustomsClearance.Platform.Common]*</Include>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!-- Coverage gate (Day 12/ADR-0007). Platform.Logging is a shared
+         platform library, not core business/rules logic - CRUD-tier (80%)
+         classification. -->
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>./TestResults/coverage/</CoverletOutput>
+    <Threshold>80</Threshold>
+    <ThresholdType>line</ThresholdType>
+    <ThresholdStat>total</ThresholdStat>
+    <!-- Scope coverage to this project's own assembly only - see the
+         longer explanation in Platform.Audit.Tests.csproj (Day 17
+         finding). No transitive dependency here yet, but applied
+         consistently so every test project's threshold measures only
+         its own library. -->
+    <Include>[CustomsClearance.Platform.Logging]*</Include>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- coverlet.msbuild only, not coverlet.collector - the two conflict
+         and silently produce empty coverage (ADR-0007, Finding 1). -->
+    <PackageReference Include="coverlet.msbuild" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="8.0.8" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Platform\Logging\CustomsClearance.Platform.Logging.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -12,11 +12,19 @@ WORKDIR /src
 COPY CustomsClearance.sln Directory.Build.props ./
 COPY src/Api/CustomsClearance.Api.csproj src/Api/
 COPY src/Platform/Common/CustomsClearance.Platform.Common.csproj src/Platform/Common/
+COPY src/Platform/Logging/CustomsClearance.Platform.Logging.csproj src/Platform/Logging/
+COPY src/Platform/ErrorHandling/CustomsClearance.Platform.ErrorHandling.csproj src/Platform/ErrorHandling/
+COPY src/Platform/Security/CustomsClearance.Platform.Security.csproj src/Platform/Security/
+COPY src/Platform/Audit/CustomsClearance.Platform.Audit.csproj src/Platform/Audit/
 
 RUN dotnet restore src/Api/CustomsClearance.Api.csproj
 
 COPY src/Api/ src/Api/
 COPY src/Platform/Common/ src/Platform/Common/
+COPY src/Platform/Logging/ src/Platform/Logging/
+COPY src/Platform/ErrorHandling/ src/Platform/ErrorHandling/
+COPY src/Platform/Security/ src/Platform/Security/
+COPY src/Platform/Audit/ src/Platform/Audit/
 
 RUN dotnet publish src/Api/CustomsClearance.Api.csproj -c Release -o /app --no-restore
 

@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- FrameworkReference for core ASP.NET Core types (IApplicationBuilder,
+       DI extensions, etc.), same pattern as Platform.Logging/ErrorHandling.
+       JwtBearer itself is NOT part of the shared framework (unlike most
+       ASP.NET Core middleware) - it ships as its own NuGet package,
+       confirmed the hard way when the FrameworkReference alone failed to
+       resolve it. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
+  </ItemGroup>
+
+</Project>

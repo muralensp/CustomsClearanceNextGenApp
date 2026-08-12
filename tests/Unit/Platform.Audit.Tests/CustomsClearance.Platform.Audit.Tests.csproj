@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!-- Coverage gate (ADR-0007). Platform.Audit is a shared platform
+         library - CRUD-tier (80%) classification. -->
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>./TestResults/coverage/</CoverletOutput>
+    <Threshold>80</Threshold>
+    <ThresholdType>line</ThresholdType>
+    <ThresholdStat>total</ThresholdStat>
+    <!-- Scope coverage to THIS project's own assembly only. Without this,
+         coverlet also instruments every referenced project (here,
+         Platform.Logging via Platform.Audit's ProjectReference), which
+         drags the threshold up or down based on code this test project
+         doesn't actually own or test - found for real on Day 17 (Logging
+         appeared in this project's coverage report at 13%, nearly failing
+         the gate for reasons unrelated to Audit itself). Each library's
+         own test project (Platform.Logging.Tests, etc.) is what measures
+         that library's coverage. -->
+    <Include>[CustomsClearance.Platform.Audit]*</Include>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- coverlet.msbuild only, not coverlet.collector (ADR-0007 Finding 1). -->
+    <PackageReference Include="coverlet.msbuild" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Platform\Audit\CustomsClearance.Platform.Audit.csproj" />
+  </ItemGroup>
+
+</Project>
