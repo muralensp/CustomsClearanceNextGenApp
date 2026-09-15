@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Day 22 - API Gateway. A genuine separate deployable in front of the
+    single src/Api host, per Day6_API_Standards_v1.1.docx Section 2
+    ("gateway for external ingress only; internal calls authenticated") -
+    not a Modular Monolith violation (ADR-0003): the monolith is the one
+    Api host behind the gateway, not multiple services fronted by it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Yarp.ReverseProxy" Version="2.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Platform\Logging\CustomsClearance.Platform.Logging.csproj" />
+    <ProjectReference Include="..\Platform\ErrorHandling\CustomsClearance.Platform.ErrorHandling.csproj" />
+  </ItemGroup>
+
+</Project>

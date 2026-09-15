@@ -9,15 +9,33 @@
 # refer to itself). appsettings.Development.json's own connection string
 # uses Host=localhost for the case of running the Api directly via
 # `dotnet run` against docker-compose's postgres port mapping (5432:5432).
+#
+# Day 22: the "gateway" service is now the sole published edge (host port
+# 8080), per Day6_API_Standards_v1.1.docx Section 2 ("gateway for external
+# ingress only"). "api" no longer publishes a host port - it's reachable
+# only on the internal compose network as http://api:8080, which the
+# gateway's ReverseProxy__Clusters__api-cluster__Destinations__api-
+# destination__Address override below points at.
 
 services:
+  gateway:
+    build:
+      context: .
+      dockerfile: src/Gateway/Dockerfile
+    image: customsclearance-gateway:dev
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ReverseProxy__Clusters__api-cluster__Destinations__api-destination__Address=http://api:8080/
+    depends_on:
+      - api
+
   api:
     build:
       context: .
       dockerfile: src/Api/Dockerfile
     image: customsclearance-api:dev
-    ports:
-      - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DiagnosticsDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly

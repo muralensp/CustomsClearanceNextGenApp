@@ -241,6 +241,7 @@ instruction to begin.
 | Day | Deliverable | Key artifacts | ADR |
 |---|---|---|---|
 | 21 | Environment & Containerization — Docker Compose confirmed as local dev env, "hello world" (`/health`) re-proven end-to-end against real Postgres, bounded-context project template added | `adr/0015-*.md`, `templates/BoundedContextTemplate/`, `Day21_Execution_Log.md` | ADR-0015 |
+| 22 | API Gateway — YARP gateway (`src/Gateway`) as sole published edge, routes to `Api` host's `/health`, rate limiting + auth passthrough proven live | `adr/0016-*.md`, `src/Gateway/`, `Day22_Execution_Log.md` | ADR-0016 |
 
 ### Day 21 — Environment & Containerization
 
@@ -271,3 +272,40 @@ replacing it.
 instruction to begin. Per ADR-0015's Consequences, Days 22-25 will likely need the same kind of
 Modular-Monolith reinterpretation Day 21 needed (middleware/library concerns wired into the single
 `Api` host rather than standalone services) — flagged now, not decided ahead of that day's work.
+
+### Day 22 — API Gateway
+
+**Decision**: Built a real YARP-based gateway (`src/Gateway/CustomsClearance.Gateway.csproj`) as
+the sole published edge, per Day6_API_Standards_v1.1.docx Section 2 ("gateway for external
+ingress only; internal calls authenticated") — this turned out to be an existing standard being
+implemented for the first time, not a new architectural surface, and fits the Modular Monolith
+(ADR-0003) cleanly since it fronts the one `Api` host, not several services. Technology choice
+(YARP over Ocelot/nginx) confirmed with the user before building. `docker-compose.yml`: `gateway`
+now publishes host port 8080 (where `api` used to); `api` is internal-only
+(`http://api:8080` on the compose network). Single catch-all route to the `Api` host; global
+fixed-window rate limiter (100 req/10s/IP, 429 on rejection — a dev-time default, not tuned);
+`Authorization` header passthrough (no auth performed at the gateway itself); own `/__gateway/health`
+liveness endpoint distinct from the proxied `/health`.
+
+**Real bug found and fixed**: `Platform.Logging`'s `CorrelationIdMiddleware` (Day 16) only wrote
+the correlation ID onto the response, never the request — invisible in a single-host setup, but
+meant a gateway-generated ID never reached the proxied `Api` destination via YARP (which forwards
+request headers downstream by default), so `Api` minted its own separate ID. Fixed by also setting
+`context.Request.Headers[HeaderName]`; re-verified end-to-end (single consistent ID, both
+gateway-generated and client-supplied cases) and `Platform.Logging.Tests` still 100% coverage.
+
+**Verification**: full container round trip (not assumed from Day 21) — `docker compose up
+--build`, gateway's own health + proxied `Api` health both 200, direct `Api` port access
+confirmed closed, a real Postgres-backed `POST /diagnostics/widgets` proxied successfully, rate
+limiting confirmed via a concurrent 150-request burst (121×200/29×429) with window-reset
+re-verified, and `build/scripts/smoke-test.sh` (the actual CI script) passed unmodified since it
+already targets `localhost:8080`. Full-solution build/format/test re-run clean.
+
+**Files added**: `src/Gateway/` (csproj, `Program.cs`, `appsettings.json`, `Dockerfile`),
+`adr/0016-api-gateway.md`, `Phase-1_Architecture_Engineering_Prep/Day22_Execution_Log.md`.
+**Files modified**: `docker-compose.yml` (gateway service added, `api`'s host port removed),
+`CustomsClearance.sln` (Gateway project added), `src/Platform/Logging/CorrelationIdMiddleware.cs`
+(request-header propagation fix).
+
+**Status**: Complete. Next unstarted item is **Day 23 — Identity & Access**, pending explicit
+instruction to begin.
