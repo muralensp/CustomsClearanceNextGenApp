@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Bounded-context Infrastructure project, per ADR-0006 and ADR-0015 (this template). References
+    {Context}.csproj (never the reverse) plus EF Core/Npgsql for the concrete DbContext and
+    EfRepository<TEntity, TId>-based implementations of this context's narrower repository ports.
+    Package versions pinned to match Platform.Persistence (ADR-0001: PostgreSQL primary, avoid
+    provider-specific SQL so the SQL Server migration path stays open).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Context.csproj" />
+    <ProjectReference Include="..\..\..\Platform\Persistence\CustomsClearance.Platform.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

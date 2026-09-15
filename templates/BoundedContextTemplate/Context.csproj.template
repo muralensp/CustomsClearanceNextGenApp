@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Bounded-context Domain+Application project, per ADR-0006 (Clean Architecture adaptation) and
+    ADR-0015 (this template). No EF Core reference here — persistence types belong in the sibling
+    {Context}.Infrastructure.csproj. Reference CustomsClearance.Platform.Persistence for
+    IRepository<TEntity, TId> / AuditableEntity<TId>, and Platform.Messaging for
+    DomainEventEnvelope<TPayload> / IEventPublisher, then build a narrower port on top (e.g.
+    IDeclarationRepository over IRepository<Declaration, Guid>) per ADR-0012.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Platform\Persistence\CustomsClearance.Platform.Persistence.csproj" />
+    <ProjectReference Include="..\..\Platform\Messaging\CustomsClearance.Platform.Messaging.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -64,6 +64,12 @@ durable index of what's been decided and built, kept in sync as work progresses.
   `InMemoryEventBus` is a same-process placeholder; a real broker (Kafka/RabbitMQ/Azure Service
   Bus) is a Phase 0 decision, swapped in behind `AddCustomsClearanceMessaging()` without changing
   the envelope/handler contract. See ADR-0012.
+- **Local dev environment**: Docker Compose (not local Kubernetes) — matches solo-developer scale;
+  cloud/hosting target for Staging/Production remains deliberately deferred (no real deployment
+  need yet). "Base service template" reinterpreted for the Modular Monolith (ADR-0003) as a
+  bounded-context project template (`templates/BoundedContextTemplate/`: `Context.csproj` +
+  `Context.Infrastructure.csproj`, per ADR-0006's split), not a new per-context container. See
+  ADR-0015.
 
 ## Standing Lessons (apply proactively, don't re-derive)
 
@@ -111,7 +117,7 @@ durable index of what's been decided and built, kept in sync as work progresses.
 | 17 | Security & Audit Platform libraries (JWT auth, role policies, audit trail) | `src/Platform/Security/`, `src/Platform/Audit/`, `Day17_Execution_Log.md` | ADR-0011 |
 | 18 | Persistence & Messaging Platform libraries (EF Core repo base, in-process pub/sub) | see below | ADR-0012 |
 | 19 | Rules-Engine Design Spike — design doc complete; throwaway prototype pending separate confirmation | `Day19_Execution_Log.md` | ADR-0013 |
-| 20 | Phase -1 Exit Review (not yet started) | — | — |
+| 20 | Phase -1 Exit Review — Gate 1 walked retrospectively, Pass, go decision for Phase 0 | `Day20_Phase-1_Exit_Review.docx`, `Day20_Execution_Log.md` | — |
 
 Days 1-7 predate formal ADR numbering; their decisions are captured directly in the referenced
 `.docx` deliverables and carried forward into ADR-0001/0002 once formalized on Day 8.
@@ -199,3 +205,69 @@ pipeline stage — reusing one category across two stages (FTZ and De Minimis bo
 caused the loader to load both rules into both stages.
 
 **Status**: Design doc + prototype validation complete.
+
+### Day 20 — Phase -1 Exit Review
+
+**Decision**: Walked `docs/quality-gates/Gate1_Architecture_Review.md` retrospectively against all
+Phase -1 work (Days 1-19), since Gate 1 is explicitly scoped to run "at the start of implementing
+any new bounded context module, and at Phase -1 exit (Day 20)." All five sections (Standards
+Followed, Naming Conventions, Security, Performance, Documentation) passed — most Standards/
+Security/Performance checks are N/A at this stage since all 17 bounded contexts remain empty
+scaffolding with zero cross-context `ProjectReference`s. One documentation gap found and fixed:
+`adr/0013-rules-engine-design-spike.md` was still `Status: Proposed` despite Phase 0 Days 31-35
+being scoped to build directly against it — formally accepted as part of this review.
+`adr/0014-ai-ml-integration-strategy.md` (added same-day, in response to an ad hoc question about
+integrating Digicust-style AI features) was deliberately left `Proposed` — it records strategy for
+a later phase, not a settled decision the codebase is built against yet. Full-solution
+verification re-run as part of the review: build (0 warnings/errors), `dotnet format
+--verify-no-changes` (clean), and `dotnet test` (9/9 passed). **Result: Pass — GO decision** to
+begin Phase 0.
+
+**Noted, non-blocking exception carried forward**: the cross-bounded-context `ProjectReference`
+check remains manual (an ADR-0006-tracked follow-up, not yet automated) — confirmed clean by
+direct inspection for Day 20, but should be automated before Phase 0 bounded-context
+implementation begins in earnest.
+
+**Files added**: `Phase-1_Architecture_Engineering_Prep/Day20_Phase-1_Exit_Review.docx`,
+`Phase-1_Architecture_Engineering_Prep/Day20_Execution_Log.md`. `adr/0014-ai-ml-integration-strategy.md`
+added (Proposed) and `adr/0013-rules-engine-design-spike.md` updated (Proposed → Accepted).
+
+**Status**: Complete. Phase -1 (Days 1-20) is closed. Next unstarted item is **Phase 0, Day 21 —
+infrastructure/CD/hosting decision** (per ADR-0008's deliberate deferral), pending explicit
+instruction to begin.
+
+## Day-by-Day Deliverables Log (Phase 0: Foundation & Core Services)
+
+| Day | Deliverable | Key artifacts | ADR |
+|---|---|---|---|
+| 21 | Environment & Containerization — Docker Compose confirmed as local dev env, "hello world" (`/health`) re-proven end-to-end against real Postgres, bounded-context project template added | `adr/0015-*.md`, `templates/BoundedContextTemplate/`, `Day21_Execution_Log.md` | ADR-0015 |
+
+### Day 21 — Environment & Containerization
+
+**Decision**: Confirmed **Docker Compose** (not local Kubernetes) as the local/dev environment —
+unchanged from Day 13/18's `docker-compose.yml`, just formally decided rather than left implicit.
+Cloud/hosting target for Staging/Production stays deliberately deferred (ADR-0008's rows remain
+"Not yet implemented"). Reinterpreted the Day-Wise Plan's "base service template project" for this
+project's **Modular Monolith** (ADR-0003): rather than a new per-context container/microservice
+scaffold, built a **bounded-context project template** (`templates/BoundedContextTemplate/`) — a
+`Context.csproj` + `Context.Infrastructure.csproj` pair matching ADR-0006's split — for Phase 3+
+use, when a bounded context's real build actually starts. Both decisions and the reasoning are
+recorded in ADR-0015, following the same "adapt and document explicitly" pattern ADR-0006 set.
+
+**Verification**: the "hello world in a container" deliverable was re-proven end-to-end today
+(not assumed from Day 13/18's history) — Docker Desktop started, `docker compose up -d --build`
+(fresh image), `GET /health` → 200, `POST /diagnostics/widgets?name=day21-check` → 200 with
+container logs confirming a real `CREATE TABLE "Widgets"` DDL statement against the `postgres`
+service, `docker compose down` (containers/network removed, named volume left intact for dev
+persistence).
+
+**Files added**: `adr/0015-local-dev-environment-and-context-template.md`,
+`templates/BoundedContextTemplate/{Context.csproj.template, Context.Infrastructure.csproj.template,
+README.md}`, `Phase-1_Architecture_Engineering_Prep/Day21_Execution_Log.md`. No changes to
+`docker-compose.yml`/`src/Api/Dockerfile` — Day 21 confirmed the existing setup rather than
+replacing it.
+
+**Status**: Complete. Next unstarted item is **Day 22 — API Gateway**, pending explicit
+instruction to begin. Per ADR-0015's Consequences, Days 22-25 will likely need the same kind of
+Modular-Monolith reinterpretation Day 21 needed (middleware/library concerns wired into the single
+`Api` host rather than standalone services) — flagged now, not decided ahead of that day's work.

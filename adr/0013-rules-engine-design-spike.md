@@ -1,7 +1,7 @@
 # ADR-0013: Rules-Engine Evaluation Pipeline Design (Day 19 Spike)
 
-**Status:** Proposed
-**Date:** 2026-08-12
+**Status:** Accepted
+**Date:** 2026-08-12 (accepted 2026-09-15, Day 20 Phase -1 Exit Review)
 **Deciders:** User (Product Owner / Implementer), Claude (design/build support)
 
 ## Context
