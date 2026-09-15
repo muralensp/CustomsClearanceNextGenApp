@@ -33,6 +33,15 @@ public class CorrelationIdMiddleware
         CorrelationIdAccessor.Current = correlationId;
         context.Response.Headers[HeaderName] = correlationId;
 
+        // Also set on the incoming request headers (not just the response):
+        // when this middleware runs in front of a reverse proxy (Day 22
+        // Gateway + YARP), the proxy forwards the request's own header
+        // collection downstream by default. Without this, a
+        // gateway-generated ID (no header on the original client request)
+        // never reaches the proxied destination, which then mints its own
+        // - producing two different correlation IDs for one request.
+        context.Request.Headers[HeaderName] = correlationId;
+
         using (_logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
         {
             await _next(context);
