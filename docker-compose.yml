@@ -16,6 +16,12 @@
 # only on the internal compose network as http://api:8080, which the
 # gateway's ReverseProxy__Clusters__api-cluster__Destinations__api-
 # destination__Address override below points at.
+#
+# Day 24: "rabbitmq" is the real event bus (ADR-0012's anticipated swap for
+# InMemoryEventBus), same Host=rabbitmq (compose DNS) vs Host=localhost
+# (appsettings.Development.json, for `dotnet run` outside a container)
+# split as postgres. The management UI (15672) is published for the "event
+# bus operational" proof (queue/exchange visible), not required at runtime.
 
 services:
   gateway:
@@ -40,9 +46,26 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DiagnosticsDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__IdentityDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
+      - RabbitMq__HostName=rabbitmq
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
 
   postgres:
     image: postgres:16-alpine

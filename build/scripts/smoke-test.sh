@@ -15,6 +15,14 @@
 # 14, is in-process only and has no database) - so this is where the
 # Persistence library's real-database behavior gets CI coverage, not just
 # local manual verification.
+#
+# Day 24 adds a real event-bus round-trip check: the widget-creation call
+# above already publishes a DiagnosticsWidgetCreated event through
+# RabbitMqEventBus; this checks the Api's own logs for the "HANDLED
+# event" line DiagnosticsWidgetCreatedHandler emits, carrying the same
+# EventId, proving the real RabbitMQ publish/consume path (not just that
+# PublishAsync returned without throwing) - same reasoning as the
+# PostgreSQL check above, extended to the event bus.
 set -euo pipefail
 
 echo "== Building and starting dev environment (docker compose) =="
@@ -68,3 +76,29 @@ if ! echo "${GET_RESPONSE}" | grep -q "CiSmokeTestWidget"; then
 fi
 
 echo "PostgreSQL round-trip verified: widget created and read back successfully."
+
+echo "== Verifying real RabbitMQ publish/consume round-trip (Platform.Messaging) =="
+CREATE_EVENT_ID=$(echo "${CREATE_RESPONSE}" | grep -o '"eventId":"[^"]*"' | cut -d'"' -f4)
+if [ -z "${CREATE_EVENT_ID}" ]; then
+  echo "Failed to extract eventId from create response."
+  exit 1
+fi
+
+EVENT_HANDLED=false
+for i in $(seq 1 10); do
+  if docker compose logs api 2>/dev/null | grep -q "HANDLED event.*${CREATE_EVENT_ID}"; then
+    echo "Event ${CREATE_EVENT_ID} handled after ${i} attempt(s)."
+    EVENT_HANDLED=true
+    break
+  fi
+  echo "Attempt ${i}/10: event not yet handled, retrying in 1s..."
+  sleep 1
+done
+
+if [ "${EVENT_HANDLED}" != "true" ]; then
+  echo "DiagnosticsWidgetCreated event was never handled via RabbitMQ."
+  docker compose logs api
+  exit 1
+fi
+
+echo "RabbitMQ round-trip verified: event published and consumed successfully."

@@ -243,6 +243,7 @@ instruction to begin.
 | 21 | Environment & Containerization — Docker Compose confirmed as local dev env, "hello world" (`/health`) re-proven end-to-end against real Postgres, bounded-context project template added | `adr/0015-*.md`, `templates/BoundedContextTemplate/`, `Day21_Execution_Log.md` | ADR-0015 |
 | 22 | API Gateway — YARP gateway (`src/Gateway`) as sole published edge, routes to `Api` host's `/health`, rate limiting + auth passthrough proven live | `adr/0016-*.md`, `src/Gateway/`, `Day22_Execution_Log.md` | ADR-0016 |
 | 23 | Identity & Access — in-house login (`POST /auth/login`) issuing role-based JWTs, Postgres-backed dev-persona users, proven end-to-end incl. wrong-role 403 | `adr/0017-*.md`, `src/Api/Identity/`, `src/Platform/Security/ITokenIssuer.cs`, `Day23_Execution_Log.md` | ADR-0017 |
+| 24 | Event Bus — real RabbitMQ swap for `InMemoryEventBus` (`RabbitMqEventBus`/`RabbitMqEventConsumer`), sample event flow proven end-to-end incl. CI smoke-test | `adr/0018-*.md`, `src/Platform/Messaging/RabbitMq*.cs`, `Day24_Execution_Log.md` | ADR-0018 |
 
 ### Day 21 — Environment & Containerization
 
@@ -359,3 +360,53 @@ password/unknown user → 401; no token → 401. Full-solution build/format/test
 
 **Status**: Complete. Next unstarted item is **Day 24 — Event Bus**, pending explicit instruction
 to begin.
+
+### Day 24 — Event Bus
+
+**Decision**: Built the real broker swap ADR-0012 (Day 18) explicitly anticipated for
+`InMemoryEventBus` — **RabbitMQ** (confirmed with the user over Kafka's heavier footprint and
+Azure Service Bus's deferred cloud commitment), **wired in behind
+`AddCustomsClearanceMessaging()`** (not just an unwired container) via
+`AddCustomsClearanceRabbitMqMessaging`, config-driven the same way as `DiagnosticsDb`/`IdentityDb`
+(`RabbitMq:HostName` presence decides real broker vs. InMemory fallback). The real design problem:
+a RabbitMQ consumer doesn't know `TPayload` at compile time the way `InMemoryEventBus`'s publish
+call site does — solved with `EventTypeRegistry` (EventType string → CLR payload type) +
+`DomainEventDispatcher` (reflection-based deserialize + dispatch), functionally identical to
+`InMemoryEventBus`'s dispatch, just reflection-driven. `RabbitMqEventBus`/`RabbitMqEventConsumer`
+publish/consume JSON envelopes via a durable topic exchange routed by `EventType`.
+
+**Coverage approach**: extracted `DomainEventDispatcher` (the highest-risk logic — generic type
+resolution + reflection invocation) as its own class and fully unit-tested it without a real
+broker. `RabbitMqEventBus`/`RabbitMqEventConsumer` (real network I/O) were marked
+`[ExcludeFromCodeCoverage]` with explicit justification rather than force-covered with hand-rolled
+fakes for `RabbitMQ.Client`'s `IConnection`/`IModel` — this codebase has no mocking library
+anywhere, by consistent pattern (same reasoning as `EfRepository`'s real-Postgres-only proof).
+Proven instead via a live `docker compose` run and a new CI-enforced check.
+
+**Real bug found and fixed**: the same class of startup race as Day 18's Postgres finding —
+`docker-compose`'s `rabbitmq` healthcheck reports healthy once the Erlang node is up, before the
+AMQP listener actually accepts connections; the Api crashed with `BrokerUnreachableException` on
+first live run. Fixed with `RabbitMqConnectionHelper.CreateConnectionWithRetry` (10 attempts, 2s
+backoff, synchronous since both call sites are eagerly-resolved constructors) — re-verified from a
+genuinely fresh `docker compose down -v`/`up --build` cycle.
+
+**Verification**: full publish→consume round trip proven live — same EventId/CorrelationId at
+publish and at "HANDLED event" in the Api logs; RabbitMQ management API confirms the durable
+exchange/queue with an active consumer. `build/scripts/smoke-test.sh` (the actual CI script)
+extended with a real RabbitMQ round-trip check (polls Api logs for the handled EventId), passing
+with unpiped exit code 0. Full-solution build/format/test all re-confirmed clean, unpiped.
+
+**Files added**: `src/Platform/Messaging/` (`RabbitMqOptions.cs`, `EventTypeRegistry.cs`,
+`DomainEventDispatcher.cs`, `RabbitMqEventBus.cs`, `RabbitMqEventConsumer.cs`,
+`RabbitMqConnectionHelper.cs`); `tests/Unit/Platform.Messaging.Tests/`
+(`DomainEventDispatcherTests.cs`, `ServiceCollectionExtensionsTests.cs`); `adr/0018-event-bus.md`;
+`Phase-1_Architecture_Engineering_Prep/Day24_Execution_Log.md`. **Files modified**:
+`src/Platform/Messaging/ServiceCollectionExtensions.cs`,
+`src/Platform/Messaging/CustomsClearance.Platform.Messaging.csproj` (added
+`Microsoft.Extensions.Hosting.Abstractions`, `Microsoft.Extensions.Options.ConfigurationExtensions`,
+`RabbitMQ.Client`), `src/Api/Program.cs`, `src/Api/appsettings.Development.json`,
+`docker-compose.yml` (new `rabbitmq` service), `tests/Integration/Api.IntegrationTests/
+TestApiFactory.cs`, `build/scripts/smoke-test.sh`.
+
+**Status**: Complete. Next unstarted item is **Day 25 — Base Security Framework**, pending
+explicit instruction to begin.

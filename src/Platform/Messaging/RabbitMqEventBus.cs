@@ -1,0 +1,92 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using RabbitMQ.Client;
+
+namespace CustomsClearance.Platform.Messaging;
+
+/// <summary>
+/// Real, cross-process IEventPublisher (Day 24) - the swap ADR-0012 named
+/// as a future step behind AddCustomsClearanceMessaging(), without
+/// changing the envelope/handler contract application code depends on.
+/// Publishes the whole DomainEventEnvelope&lt;TPayload&gt; as JSON to a
+/// topic exchange, routed by EventType, so a future second consumer
+/// (different queue, same exchange) could subscribe to a subset of event
+/// types without this publisher changing.
+///
+/// One shared IConnection (thread-safe per the RabbitMQ.Client docs), a
+/// new IModel per publish call - IModel itself is not thread-safe to
+/// share across concurrent calls, and a channel-per-publish is the
+/// documented-safe default; pooling channels is a later optimization if
+/// publish volume ever makes this a bottleneck (none observed at Day 24
+/// dev-time scale).
+///
+/// Excluded from the ADR-0007 coverage gate: this class's real work is a
+/// live network connection to RabbitMQ, which this codebase has no
+/// mocking library to fake (no Moq/NSubstitute anywhere, by design - see
+/// EfRepository's real-Postgres-only proof pattern) and hand-writing fakes
+/// for IConnection/IModel's full surface isn't proportionate to what Day
+/// 24 needs. Proven instead by a real docker-compose run (see
+/// adr/0018/Day24_Execution_Log.md) - the same "container smoke-test
+/// layer, not unit tests" split ADR-0009 already established for
+/// Postgres. The one piece of real risk here (reflection-based dispatch)
+/// is NOT excluded - see DomainEventDispatcher, which is fully unit-tested.
+/// </summary>
+[ExcludeFromCodeCoverage(Justification = "Real RabbitMQ network I/O - no mocking library in this codebase (ADR-0007/0009 precedent); proven via live docker-compose run instead. See class doc comment.")]
+public sealed class RabbitMqEventBus : IEventPublisher, IDisposable
+{
+    private readonly IConnection _connection;
+    private readonly RabbitMqOptions _options;
+    private readonly ILogger<RabbitMqEventBus> _logger;
+
+    public RabbitMqEventBus(IOptions<RabbitMqOptions> options, ILogger<RabbitMqEventBus> logger)
+    {
+        _options = options.Value;
+        _logger = logger;
+
+        var factory = new ConnectionFactory
+        {
+            HostName = _options.HostName,
+            Port = _options.Port,
+            UserName = _options.UserName,
+            Password = _options.Password,
+        };
+        _connection = RabbitMqConnectionHelper.CreateConnectionWithRetry(factory, "CustomsClearance.Api", logger);
+    }
+
+    public Task PublishAsync<TPayload>(DomainEventEnvelope<TPayload> envelope, CancellationToken cancellationToken = default)
+    {
+        using var channel = _connection.CreateModel();
+        channel.ExchangeDeclare(_options.ExchangeName, ExchangeType.Topic, durable: true);
+
+        var body = JsonSerializer.SerializeToUtf8Bytes(envelope);
+        var properties = channel.CreateBasicProperties();
+        properties.ContentType = "application/json";
+        properties.MessageId = envelope.EventId.ToString();
+        properties.Persistent = true;
+
+        channel.BasicPublish(
+            exchange: _options.ExchangeName,
+            routingKey: envelope.EventType,
+            basicProperties: properties,
+            body: body);
+
+        _logger.LogInformation(
+            "Published event {EventType} v{EventVersion} ({EventId}) from {Source} to RabbitMQ exchange {Exchange}. CorrelationId={CorrelationId}",
+            envelope.EventType,
+            envelope.EventVersion,
+            envelope.EventId,
+            envelope.Source,
+            _options.ExchangeName,
+            envelope.CorrelationId);
+
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _connection.Close();
+        _connection.Dispose();
+    }
+}

@@ -32,7 +32,24 @@ builder.Services.AddCustomsClearanceAuthentication(builder.Configuration);
 builder.Services.AddCustomsClearanceAuthorization();
 builder.Services.AddCustomsClearanceTokenIssuance(builder.Configuration);
 builder.Services.AddCustomsClearanceAudit();
-builder.Services.AddCustomsClearanceMessaging();
+
+// Day 24: real event bus (RabbitMQ) when configured, InMemoryEventBus
+// otherwise - same "absence means skip" convention as ConnectionStrings:
+// DiagnosticsDb/IdentityDb, and required by ADR-0009 (integration tests
+// must not require infrastructure; TestApiFactory blanks RabbitMq:HostName
+// the same way it blanks those connection strings).
+var rabbitMqHostName = builder.Configuration["RabbitMq:HostName"];
+if (!string.IsNullOrWhiteSpace(rabbitMqHostName))
+{
+    builder.Services.AddCustomsClearanceRabbitMqMessaging(builder.Configuration, registry =>
+    {
+        registry.Register<DiagnosticsWidgetCreatedPayload>("DiagnosticsWidgetCreated");
+    });
+}
+else
+{
+    builder.Services.AddCustomsClearanceMessaging();
+}
 
 // Development-only: DiagnosticsDbContext proves Platform.Persistence
 // against the real PostgreSQL container (docker-compose, Day 13). A real
