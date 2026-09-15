@@ -12,13 +12,16 @@
 // isolated unit tests.
 
 using CustomsClearance.Api.Diagnostics;
+using CustomsClearance.Api.Identity;
 using CustomsClearance.Platform.Audit;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.Logging;
 using CustomsClearance.Platform.Messaging;
 using CustomsClearance.Platform.Persistence;
 using CustomsClearance.Platform.Security;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,6 +30,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCustomsClearanceAuthentication(builder.Configuration);
 builder.Services.AddCustomsClearanceAuthorization();
+builder.Services.AddCustomsClearanceTokenIssuance(builder.Configuration);
 builder.Services.AddCustomsClearanceAudit();
 builder.Services.AddCustomsClearanceMessaging();
 
@@ -40,6 +44,16 @@ if (!string.IsNullOrWhiteSpace(connectionString))
     builder.Services.AddDbContext<DiagnosticsDbContext>(options => options.UseNpgsql(connectionString));
     builder.Services.AddScoped<PlatformDbContext>(sp => sp.GetRequiredService<DiagnosticsDbContext>());
     builder.Services.AddScoped<DiagnosticsWidgetRepository>();
+}
+
+// Day 23: IdentityDbContext, same real-PostgreSQL-placeholder status as
+// DiagnosticsDbContext above - a separate connection string (still the
+// same physical dev database by default; see appsettings.Development.json)
+// so this can later point at a dedicated store without touching Diagnostics.
+var identityConnectionString = builder.Configuration.GetConnectionString("IdentityDb");
+if (!string.IsNullOrWhiteSpace(identityConnectionString))
+{
+    builder.Services.AddDbContext<IdentityDbContext>(options => options.UseNpgsql(identityConnectionString));
 }
 
 builder.Services.AddScoped<IEventHandler<DiagnosticsWidgetCreatedPayload>, DiagnosticsWidgetCreatedHandler>();
@@ -83,6 +97,57 @@ if (app.Environment.IsDevelopment())
             }
         }
     }
+
+    // Same retry-with-backoff reasoning as DiagnosticsDb above (Day 18's
+    // real docker-compose startup-race finding) - EnsureCreatedAsync, then
+    // seed the 4 dev-persona users (Day 23) if the table is empty.
+    if (!string.IsNullOrWhiteSpace(identityConnectionString))
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var scope = app.Services.CreateScope();
+                var identityDb = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+
+                // EnsureCreatedAsync only creates the physical DATABASE if
+                // missing - it no-ops (does not add tables) when the
+                // database already exists, which it does here: Diagnostics
+                // (above) already created it. Found for real (Day 23): the
+                // Api crashed with "relation Users does not exist" on
+                // first login, because IdentityDbContext's own
+                // EnsureCreatedAsync silently skipped table creation.
+                // Falling back to the relational database creator's
+                // CreateTablesAsync (this context's tables only), tolerating
+                // "already exists" on a container restart against a
+                // persisted volume.
+                var created = await identityDb.Database.EnsureCreatedAsync();
+                if (!created)
+                {
+                    var databaseCreator = (Microsoft.EntityFrameworkCore.Storage.RelationalDatabaseCreator)
+                        identityDb.GetService<Microsoft.EntityFrameworkCore.Storage.IDatabaseCreator>();
+                    try
+                    {
+                        await databaseCreator.CreateTablesAsync();
+                    }
+                    catch (Npgsql.PostgresException ex) when (ex.SqlState == Npgsql.PostgresErrorCodes.DuplicateTable)
+                    {
+                        // Already created by a previous run against this
+                        // same persisted volume - fine, not an error.
+                    }
+                }
+
+                await IdentitySeeder.SeedIfEmptyAsync(identityDb);
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                app.Logger.LogWarning(ex, "IdentityDb not ready (attempt {Attempt}/{MaxAttempts}), retrying in 2s...", attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+    }
 }
 
 // Order matters: correlation ID must be established before error handling
@@ -103,6 +168,32 @@ app.UseAuthorization();
 // not just that it builds.
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", service = "CustomsClearance.Api" }))
     .WithName("HealthCheck");
+
+// Day 23: login endpoint - real capability (not a diagnostic), gated the
+// same way as the widgets endpoints below (RequestDelegateFactory validates
+// parameter bindability at MAP time, so this must only be mapped when
+// IdentityDbContext is actually registered).
+if (!string.IsNullOrWhiteSpace(identityConnectionString))
+{
+    app.MapPost("/auth/login", async (LoginRequest request, IdentityDbContext identityDb, ITokenIssuer tokenIssuer) =>
+    {
+        var user = await identityDb.Users.SingleOrDefaultAsync(u => u.Username == request.Username);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var hasher = new PasswordHasher<PlatformUser>();
+        var verification = hasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
+        if (verification == PasswordVerificationResult.Failed)
+        {
+            return Results.Unauthorized();
+        }
+
+        var issued = tokenIssuer.IssueToken(user.Id, user.Username, user.Role);
+        return Results.Ok(new LoginResponse(issued.AccessToken, issued.ExpiresAtUtc, user.Role));
+    }).WithName("Login");
+}
 
 // Development-only diagnostic endpoints proving the platform libraries work
 // end-to-end against the real host (Days 16-18) - not real business

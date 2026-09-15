@@ -2,14 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using CustomsClearance.Platform.Security;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
@@ -53,50 +45,8 @@ public class AuthenticationAuthorizationTests
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private static async Task<int> InvokeSecuredEndpointAsync(string? bearerToken)
-    {
-        using var host = await new HostBuilder()
-            .ConfigureWebHost(webBuilder =>
-            {
-                webBuilder.UseTestServer();
-                webBuilder.ConfigureServices(services =>
-                {
-                    var config = new ConfigurationBuilder()
-                        .AddInMemoryCollection(new Dictionary<string, string?>
-                        {
-                            ["Jwt:Key"] = _testKey,
-                            ["Jwt:Issuer"] = _testIssuer,
-                            ["Jwt:Audience"] = _testAudience,
-                        })
-                        .Build();
-
-                    services.AddRouting();
-                    services.AddCustomsClearanceAuthentication(config);
-                    services.AddCustomsClearanceAuthorization();
-                });
-                webBuilder.Configure(app =>
-                {
-                    app.UseRouting();
-                    app.UseAuthentication();
-                    app.UseAuthorization();
-                    app.UseEndpoints(endpoints =>
-                    {
-                        endpoints.MapGet("/secure", (HttpContext _) => Results.Ok())
-                            .RequireAuthorization(PlatformPolicies.RequireAdmin);
-                    });
-                });
-            })
-            .StartAsync();
-
-        var client = host.GetTestClient();
-        if (bearerToken is not null)
-        {
-            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {bearerToken}");
-        }
-
-        var response = await client.GetAsync("/secure");
-        return (int)response.StatusCode;
-    }
+    private static Task<int> InvokeSecuredEndpointAsync(string? bearerToken) =>
+        TestAuthHost.InvokeSecuredEndpointAsync(bearerToken, _testKey, _testIssuer, _testAudience);
 
     [Fact]
     public async Task NoToken_Returns401()

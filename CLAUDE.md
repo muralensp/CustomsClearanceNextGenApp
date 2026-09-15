@@ -242,6 +242,7 @@ instruction to begin.
 |---|---|---|---|
 | 21 | Environment & Containerization — Docker Compose confirmed as local dev env, "hello world" (`/health`) re-proven end-to-end against real Postgres, bounded-context project template added | `adr/0015-*.md`, `templates/BoundedContextTemplate/`, `Day21_Execution_Log.md` | ADR-0015 |
 | 22 | API Gateway — YARP gateway (`src/Gateway`) as sole published edge, routes to `Api` host's `/health`, rate limiting + auth passthrough proven live | `adr/0016-*.md`, `src/Gateway/`, `Day22_Execution_Log.md` | ADR-0016 |
+| 23 | Identity & Access — in-house login (`POST /auth/login`) issuing role-based JWTs, Postgres-backed dev-persona users, proven end-to-end incl. wrong-role 403 | `adr/0017-*.md`, `src/Api/Identity/`, `src/Platform/Security/ITokenIssuer.cs`, `Day23_Execution_Log.md` | ADR-0017 |
 
 ### Day 21 — Environment & Containerization
 
@@ -309,3 +310,52 @@ already targets `localhost:8080`. Full-solution build/format/test re-run clean.
 
 **Status**: Complete. Next unstarted item is **Day 23 — Identity & Access**, pending explicit
 instruction to begin.
+
+### Day 23 — Identity & Access
+
+**Decision**: Built in-house minimal Identity (not a managed provider — consistent with
+`JwtOptions`' own Day 17 phasing language and Day 21's deferred cloud commitment) as a capability
+**inside** the `Api` host (`src/Api/Identity/`), not a new deployable — unlike Day 22's Gateway,
+nothing in Day6 API Standards/ADR-0004 requires login to be network-separate. `Platform.Security`
+gains `ITokenIssuer`/`JwtTokenIssuer` (issuance, registered via
+`AddCustomsClearanceTokenIssuance`, separate from the existing `AddCustomsClearanceAuthentication`
+which only validates). A real Postgres-backed `IdentityDbContext`/`PlatformUser` table (same
+placeholder status as `DiagnosticsDbContext`) seeds one dev user per PRD persona
+(broker/supervisor/compliance/admin), password-hashed via `PasswordHasher<TUser>`. `POST
+/auth/login` issues a role-based JWT on success.
+
+**Three real bugs found and fixed**: (1) `TestApiFactory` needed `ConnectionStrings__IdentityDb`
+blanked too, alongside the existing `DiagnosticsDb` override — a second instance of Day 18's
+already-documented `WebApplicationFactory` connection-string-timing lesson. (2)
+`IdentityDbContext.EnsureCreatedAsync()` silently created no tables (`relation "Users" does not
+exist` crash), because `EnsureCreatedAsync` only creates the *database* if missing, and Diagnostics
+had already created it — fixed with a fallback to `CreateTablesAsync()` when the database already
+existed, tolerating "already exists" for idempotent restarts, verified against both a warm restart
+and a full `docker compose down -v` fresh-volume cycle. (3) Adding `JwtTokenIssuer` without direct
+tests tripped ADR-0007's 80% coverage gate on `Platform.Security` — fixed with
+`JwtTokenIssuerTests`/`ServiceCollectionExtensionsTests`, extracting a shared `TestAuthHost` test
+helper rather than duplicating the existing test's host-building code.
+
+**Meta-finding**: the first two verification passes in this session were piped through `tail`,
+silently reporting exit 0 while the real command underneath had failed (2 `dotnet format` IDE1006
+violations, then the coverage-gate failure) — the exact "never trust a piped exit code" standing
+lesson already in this file, recurring despite being documented. Re-running unpiped is what
+surfaced both.
+
+**Verification**: full role-based login flow proven live against real containers — correct
+login → JWT → 200 on an Admin-only endpoint; broker's JWT against the same endpoint → 403; wrong
+password/unknown user → 401; no token → 401. Full-solution build/format/test and the actual CI
+`smoke-test.sh` all re-confirmed clean with unpiped exit codes.
+
+**Files added**: `src/Platform/Security/ITokenIssuer.cs`, `JwtTokenIssuer.cs`; `src/Api/Identity/`
+(`IdentityDbContext.cs`, `IdentitySeeder.cs`, `LoginModels.cs`); `tests/Unit/Platform.Security.Tests/`
+(`JwtTokenIssuerTests.cs`, `ServiceCollectionExtensionsTests.cs`, `TestAuthHost.cs`);
+`adr/0017-identity-and-access.md`; `Phase-1_Architecture_Engineering_Prep/Day23_Execution_Log.md`.
+**Files modified**: `src/Api/Program.cs`, `src/Api/CustomsClearance.Api.csproj` (added
+`Microsoft.Extensions.Identity.Core`), `src/Api/appsettings.Development.json`,
+`docker-compose.yml`, `src/Platform/Security/ServiceCollectionExtensions.cs`,
+`tests/Integration/Api.IntegrationTests/TestApiFactory.cs`,
+`tests/Unit/Platform.Security.Tests/AuthenticationAuthorizationTests.cs`.
+
+**Status**: Complete. Next unstarted item is **Day 24 — Event Bus**, pending explicit instruction
+to begin.

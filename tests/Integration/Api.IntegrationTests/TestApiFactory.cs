@@ -6,10 +6,10 @@ namespace CustomsClearance.Api.IntegrationTests;
 
 /// <summary>
 /// Shared WebApplicationFactory customization for all integration tests in
-/// this project. Explicitly blanks ConnectionStrings:DiagnosticsDb so
-/// Program.cs's `if (!string.IsNullOrWhiteSpace(connectionString))` guard
-/// skips DB registration and the startup EnsureCreatedAsync/retry loop
-/// entirely.
+/// this project. Explicitly blanks ConnectionStrings:DiagnosticsDb and
+/// ConnectionStrings:IdentityDb (Day 23) so Program.cs's
+/// `if (!string.IsNullOrWhiteSpace(connectionString))` guards skip DB
+/// registration and the startup EnsureCreatedAsync/retry loops entirely.
 ///
 /// Why this exists (Day 18): WebApplicationFactory defaults its hosting
 /// environment to "Development" regardless of whether a test explicitly
@@ -48,6 +48,7 @@ public class TestApiFactory : WebApplicationFactory<Program>
         // present value that still satisfies Program.cs's
         // string.IsNullOrWhiteSpace(connectionString) guard.
         Environment.SetEnvironmentVariable("ConnectionStrings__DiagnosticsDb", " ");
+        Environment.SetEnvironmentVariable("ConnectionStrings__IdentityDb", " ");
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
