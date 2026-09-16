@@ -99,6 +99,11 @@ if (!string.IsNullOrWhiteSpace(rulesConnectionString))
     builder.Services.AddScoped<RuleRepository>();
     builder.Services.AddScoped<RuleVersionRepository>();
     builder.Services.AddScoped<RuleConditionRepository>();
+
+    // Day 32: the evaluation pipeline (IRuleSetLoader/IConditionEvaluator/
+    // IPriorityResolver/IDecisionTraceRecorder + RulesEngine orchestrator)
+    // sits behind the same RulesDb-presence guard as the schema itself.
+    builder.Services.AddCustomsClearanceRulesEngine();
 }
 
 builder.Services.AddScoped<IEventHandler<DiagnosticsWidgetCreatedPayload>, DiagnosticsWidgetCreatedHandler>();
@@ -404,6 +409,65 @@ if (app.Environment.IsDevelopment())
 
             return Results.Ok(new { rule.Id, rule.RuleCode, VersionId = version.Id, ConditionId = condition.Id });
         }).WithName("DiagnosticsCreateRule");
+
+        // Day 32: proves the real evaluation pipeline (EfRuleSetLoader
+        // against real PostgreSQL, ConditionEvaluator, PriorityResolver,
+        // RulesEngine orchestration) end-to-end - not just against EF
+        // Core's InMemory provider (Platform.RulesEngine.Tests). Seeds one
+        // De Minimis rule (ShipmentValue < 5000 -> ClearanceType = DEM)
+        // if none exists yet, then evaluates the supplied shipmentValue
+        // against it.
+        app.MapPost("/diagnostics/rules/evaluate", async (
+            decimal shipmentValue,
+            RulesDbContext dbContext,
+            RulesEngine engine) =>
+        {
+            const string seedRuleCode = "DIAG-EVAL-DEMINIMIS";
+            if (!await dbContext.Rules.AnyAsync(r => r.RuleCode == seedRuleCode))
+            {
+                var rule = new Rule
+                {
+                    Id = Guid.NewGuid(),
+                    RuleCode = seedRuleCode,
+                    Name = "Diagnostics evaluation seed rule",
+                    Description = "Day 32 pipeline proof - not a real business rule.",
+                    Category = RuleCategory.DeMinimis,
+                    Priority = 5,
+                };
+                var version = new RuleVersion
+                {
+                    Id = Guid.NewGuid(),
+                    RuleId = rule.Id,
+                    VersionNumber = 1,
+                    EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),
+                    OutcomeFactName = "ClearanceType",
+                    OutcomeValue = "DEM",
+                };
+                var condition = new RuleCondition
+                {
+                    Id = Guid.NewGuid(),
+                    RuleVersionId = version.Id,
+                    FactName = "ShipmentValue",
+                    Operator = ConditionOperator.LessThan,
+                    Value = "5000",
+                };
+                await dbContext.Rules.AddAsync(rule);
+                await dbContext.RuleVersions.AddAsync(version);
+                await dbContext.RuleConditions.AddAsync(condition);
+                await dbContext.SaveChangesAsync();
+            }
+
+            var facts = new Facts { ["ShipmentValue"] = shipmentValue };
+            var context = new EvaluationContext(Guid.NewGuid(), SubjectType.Shipment, DateOnly.FromDateTime(DateTime.UtcNow));
+
+            var result = await engine.EvaluateAsync(context, facts);
+
+            return Results.Ok(new
+            {
+                clearanceType = result.Facts["ClearanceType"],
+                trace = result.Trace.Select(step => new { step.StepOrder, step.StepName, step.RuleCode, step.Outcome }),
+            });
+        }).WithName("DiagnosticsEvaluateRules");
 
         app.MapGet("/diagnostics/rules/{id:guid}", async (Guid id, RulesDbContext dbContext) =>
         {

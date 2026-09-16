@@ -146,6 +146,25 @@ public class RulesDbContextTests
     }
 
     [Fact]
+    public void InverseNavigationProperties_CanBeSetDirectly()
+    {
+        // RuleVersion.Rule and RuleCondition.RuleVersion are the inverse-
+        // navigation halves of the Rule.Versions/RuleVersion.Conditions
+        // collections - exercised directly here since EF Core's own
+        // relationship fixup (already proven via FullGraph_PersistsAndReloadsWithNavigations
+        // above) doesn't always route through these setters in a way
+        // coverage tooling attributes to them.
+        var rule = NewRule();
+        var version = NewVersion(rule.Id);
+        version.Rule = rule;
+        var condition = NewCondition(version.Id);
+        condition.RuleVersion = version;
+
+        Assert.Same(rule, version.Rule);
+        Assert.Same(version, condition.RuleVersion);
+    }
+
+    [Fact]
     public async Task RuleVersionRepository_And_RuleConditionRepository_RoundTrip()
     {
         await using var context = CreateContext();

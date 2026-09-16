@@ -256,6 +256,7 @@ instruction to begin.
 | Day | Deliverable | Key artifacts | ADR |
 |---|---|---|---|
 | 31 | Rules Engine: Storage Model — Rule/RuleVersion/RuleCondition schema migrated against real PostgreSQL, two real bugs found and fixed (wrong DbContext resolved via DI; JSON serialization cycle) | `adr/0025-*.md`, `src/Platform/RulesEngine/`, `Day31_Execution_Log.md` | ADR-0025 |
+| 32 | Rules Engine: Evaluation Pipeline — EfRuleSetLoader/ConditionEvaluator/PriorityResolver/RulesEngine orchestration, 45 unit tests (100%/97.53% coverage), proven live against a real Postgres-loaded rule via a new diagnostic endpoint | `adr/0026-*.md`, `src/Platform/RulesEngine/RulesEngine.cs`, `Day32_Execution_Log.md` | ADR-0026 |
 
 ### Day 21 — Environment & Containerization
 
@@ -680,5 +681,49 @@ model.md`, `Phase-1_Architecture_Engineering_Prep/Day31_Execution_Log.md`. **Fil
 `src/Api/appsettings.Development.json`, `docker-compose.yml`,
 `tests/Integration/Api.IntegrationTests/TestApiFactory.cs`, `CustomsClearance.sln`.
 
-**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item is **Day 32
-— Rule Evaluation Pipeline**, pending explicit instruction to begin.
+**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item was **Day 32
+— Rule Evaluation Pipeline**.
+
+### Day 32 — Rules Engine: Evaluation Pipeline
+
+**Decision**: Built four of ADR-0013's five pipeline interfaces against Day 31's schema:
+`EfRuleSetLoader` (real EF Core query — Active + Category filter, then effective-dating selection,
+`SingleOrDefault` so an authoring bug that leaves overlapping RuleVersions throws immediately
+rather than silently picking one), `ConditionEvaluator` (all 6 operators ADR-0013 named — the Day
+19 spike only had 4 — with numeric/date-aware comparison so `GreaterThan`/`LessThan`/`Between`
+compare by magnitude, not text), `PriorityResolver` (lowest-Priority-wins, RuleCode tiebreak), and
+`RulesEngine.EvaluateAsync` orchestrating the fixed 9-stage PRD Ch.5.7 order, mutating Facts in
+place across stages. `IDecisionTraceRecorder`'s real persisted implementation stays Day 33's scope
+per ADR-0013's own breakdown — Day 32 uses an in-memory placeholder, sufficient to prove the
+pipeline. No real `IFactsProvider` built yet (no bounded context exists to assemble Facts from);
+Facts is supplied directly by the caller.
+
+**Coverage gate found real gaps, not just a number to chase**: first run landed at 92.79%
+against the 95% core-tier gate; inspected the cobertura report directly and added targeted tests
+for `ConditionEvaluator`'s fallback branches (including an out-of-range enum cast to hit the
+`NotSupportedException` default case), the `RuleVersion.Rule`/`RuleCondition.RuleVersion` inverse
+navigation setters (not reliably attributed via EF's automatic fixup), and
+`ServiceCollectionExtensions` (untested DI wiring). Reached 100%/97.53%.
+
+**Verification — live against real PostgreSQL, not just InMemory-provider unit tests**: new `POST
+/diagnostics/rules/evaluate?shipmentValue=X` endpoint seeds one real De Minimis rule if absent,
+then runs the actual `RulesEngine` against it. `shipmentValue=2000` (under threshold) →
+`clearanceType: "DEM"` with a full 9-step trace showing the winning rule; `shipmentValue=999999`
+(over threshold) → `clearanceType: null`, every stage "no match". Direct `psql` query confirmed the
+seeded rule genuinely persisted and was loaded through `EfRuleSetLoader`'s real query. 45 unit
+tests total; full-solution build/format/test and CI smoke-test all clean, unpiped.
+
+**Recurring RabbitMQ startup issue, same category as Days 26-30**: this time traced to a stale
+volume belonging to a previous run's own crashed `rabbitmq` container (not an unrelated orphan) —
+removed container + volume together; resolved on the next `up`.
+
+**Files added**: `src/Platform/RulesEngine/` (`Facts.cs`, `EvaluationContext.cs`,
+`PipelineStages.cs`, `IRuleSetLoader.cs`, `EfRuleSetLoader.cs`, `IConditionEvaluator.cs`,
+`ConditionEvaluator.cs`, `IPriorityResolver.cs`, `PriorityResolver.cs`,
+`IDecisionTraceRecorder.cs`, `RulesEngine.cs`, `ServiceCollectionExtensions.cs`), 5 new test files
+in `tests/Unit/Platform.RulesEngine.Tests/`, `adr/0026-rules-engine-evaluation-pipeline.md`,
+`Phase-1_Architecture_Engineering_Prep/Day32_Execution_Log.md`. **Files modified**:
+`src/Api/Program.cs`, `tests/Unit/Platform.RulesEngine.Tests/CustomsClearance.Platform.RulesEngine.Tests.csproj`.
+
+**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item is **Day 33
+— Rules Engine: Versioning & Decision Trace**, pending explicit instruction to begin.
