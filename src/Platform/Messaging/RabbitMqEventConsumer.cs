@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Microsoft.Extensions.Hosting;
@@ -68,6 +69,22 @@ public sealed class RabbitMqEventConsumer : BackgroundService
         {
             try
             {
+                // Day 30 finding: link this consumer span to the publisher's
+                // span via the "traceparent" header RabbitMqEventBus sets,
+                // so the trace shows publish -> consume as one connected
+                // chain instead of two disconnected traces.
+                string? traceparent = null;
+                if (args.BasicProperties?.Headers is { } headers &&
+                    headers.TryGetValue("traceparent", out var raw) && raw is byte[] bytes)
+                {
+                    traceparent = Encoding.UTF8.GetString(bytes);
+                }
+
+                using var activity = MessagingTelemetry.ActivitySource.StartActivity(
+                    $"{args.RoutingKey} receive", ActivityKind.Consumer, traceparent ?? string.Empty);
+                activity?.SetTag("messaging.system", "rabbitmq");
+                activity?.SetTag("messaging.destination", _options.ExchangeName);
+
                 var json = Encoding.UTF8.GetString(args.Body.Span);
                 await _dispatcher.DispatchAsync(args.RoutingKey, json, stoppingToken);
                 _channel.BasicAck(args.DeliveryTag, multiple: false);

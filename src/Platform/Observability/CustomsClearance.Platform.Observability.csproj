@@ -28,9 +28,12 @@
 
   <!-- Day 28 - CorrelationIdMiddleware.HeaderName, to tag every trace span
        with the same X-Correlation-Id already used for log correlation
-       (Day 16/26), so logs and traces can be cross-referenced. -->
+       (Day 16/26), so logs and traces can be cross-referenced.
+       Day 30 - MessagingTelemetry.ActivitySourceName, so AddCustomsClearanceTracing
+       can register the event bus's custom ActivitySource with the OTel SDK. -->
   <ItemGroup>
     <ProjectReference Include="..\Logging\CustomsClearance.Platform.Logging.csproj" />
+    <ProjectReference Include="..\Messaging\CustomsClearance.Platform.Messaging.csproj" />
   </ItemGroup>
 
 </Project>

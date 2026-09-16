@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -57,6 +58,17 @@ public sealed class RabbitMqEventBus : IEventPublisher, IDisposable
 
     public Task PublishAsync<TPayload>(DomainEventEnvelope<TPayload> envelope, CancellationToken cancellationToken = default)
     {
+        // Day 30 finding: carry the current trace context across the AMQP
+        // hop via a "traceparent" message header (W3C format, same as the
+        // header HTTP instrumentation uses) - RabbitMqEventConsumer reads
+        // it back to make the consumer span a real child of this publish
+        // span, not a disconnected trace.
+        using var activity = MessagingTelemetry.ActivitySource.StartActivity(
+            $"{envelope.EventType} publish", ActivityKind.Producer);
+        activity?.SetTag("messaging.system", "rabbitmq");
+        activity?.SetTag("messaging.destination", _options.ExchangeName);
+        activity?.SetTag("correlation_id", envelope.CorrelationId);
+
         using var channel = _connection.CreateModel();
         channel.ExchangeDeclare(_options.ExchangeName, ExchangeType.Topic, durable: true);
 
@@ -65,6 +77,10 @@ public sealed class RabbitMqEventBus : IEventPublisher, IDisposable
         properties.ContentType = "application/json";
         properties.MessageId = envelope.EventId.ToString();
         properties.Persistent = true;
+        if (activity?.Id is { } traceparent)
+        {
+            properties.Headers = new Dictionary<string, object> { ["traceparent"] = traceparent };
+        }
 
         channel.BasicPublish(
             exchange: _options.ExchangeName,

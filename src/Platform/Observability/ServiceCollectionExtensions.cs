@@ -1,4 +1,5 @@
 using CustomsClearance.Platform.Logging;
+using CustomsClearance.Platform.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -40,6 +41,15 @@ public static class ServiceCollectionExtensions
     /// (CorrelationIdMiddleware, Day 16) so a trace can be cross-referenced
     /// with the same-request log lines already in Loki (Day 26) - same
     /// correlation key, three observability signals.
+    ///
+    /// Day 30 (Observability Review) addition: also listens to
+    /// MessagingTelemetry.ActivitySourceName, the custom ActivitySource
+    /// RabbitMqEventBus/RabbitMqEventConsumer use - without this AddSource
+    /// call, the OpenTelemetry SDK ignores those spans entirely (an
+    /// ActivitySource with no listener is a no-op), so an event's publish/
+    /// consume spans would never reach Tempo even though the code creates
+    /// them. Harmless to register on the Gateway too, which never
+    /// publishes/consumes events - an unused source with no emitted spans.
     /// </summary>
     public static IServiceCollection AddCustomsClearanceTracing(this IServiceCollection services, string serviceName, string otlpEndpoint)
     {
@@ -57,6 +67,7 @@ public static class ServiceCollectionExtensions
                     };
                 })
                 .AddHttpClientInstrumentation()
+                .AddSource(MessagingTelemetry.ActivitySourceName)
                 .AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpEndpoint)));
 
         return services;
