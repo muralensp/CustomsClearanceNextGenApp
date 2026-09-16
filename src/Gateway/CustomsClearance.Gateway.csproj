@@ -25,6 +25,7 @@
          marked with an AuthorizationPolicy in ReverseProxy:Routes config,
          defense-in-depth ahead of the Api host's own enforcement. -->
     <ProjectReference Include="..\Platform\Security\CustomsClearance.Platform.Security.csproj" />
+    <ProjectReference Include="..\Platform\Observability\CustomsClearance.Platform.Observability.csproj" />
   </ItemGroup>
 
 </Project>

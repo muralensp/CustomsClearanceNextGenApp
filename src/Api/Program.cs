@@ -17,6 +17,7 @@ using CustomsClearance.Platform.Audit;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.Logging;
 using CustomsClearance.Platform.Messaging;
+using CustomsClearance.Platform.Observability;
 using CustomsClearance.Platform.Persistence;
 using CustomsClearance.Platform.Security;
 using Microsoft.AspNetCore.Identity;
@@ -36,6 +37,7 @@ builder.Services.AddCustomsClearanceAuthentication(builder.Configuration);
 builder.Services.AddCustomsClearanceAuthorization();
 builder.Services.AddCustomsClearanceTokenIssuance(builder.Configuration);
 builder.Services.AddCustomsClearanceAudit();
+builder.Services.AddCustomsClearanceMetrics("CustomsClearance.Api");
 
 // Day 24: real event bus (RabbitMQ) when configured, InMemoryEventBus
 // otherwise - same "absence means skip" convention as ConnectionStrings:
@@ -183,6 +185,9 @@ app.UseCustomsClearanceCorrelationId();
 app.UseCustomsClearanceErrorHandling();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Day 27: Prometheus scrape endpoint ("/metrics" by default).
+app.MapCustomsClearanceMetricsEndpoint();
 
 // Health check endpoint - used by the docker-compose smoke test in CI
 // (Day 13) to confirm the container actually starts and serves traffic,

@@ -33,6 +33,13 @@
 # not a manual setup step. Anonymous Grafana access (below) is a dev-only
 # convenience, same posture as every other LOCAL-DEV-ONLY placeholder in
 # this stack - never a real security decision.
+#
+# Day 27: "prometheus" scrapes api/gateway's OpenTelemetry-exported
+# /metrics endpoints (Platform.Observability's AddCustomsClearanceMetrics)
+# per observability/prometheus.yml. Grafana gets a second datasource
+# (Prometheus, alongside Loki) plus a provisioned dashboard
+# (observability/dashboards/api-gateway-overview.json) - same
+# zero-manual-setup provisioning discipline as Day 26.
 
 services:
   gateway:
@@ -127,8 +134,18 @@ services:
       - GF_AUTH_DISABLE_LOGIN_FORM=true
     volumes:
       - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./observability/grafana-dashboards-provider.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./observability/dashboards:/etc/grafana/provisioning/dashboards/json:ro
     depends_on:
       - loki
+      - prometheus
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
 
 volumes:
   postgres-dev-data:

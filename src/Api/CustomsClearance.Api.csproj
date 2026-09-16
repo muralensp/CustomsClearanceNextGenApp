@@ -20,6 +20,7 @@
     <ProjectReference Include="..\Platform\Audit\CustomsClearance.Platform.Audit.csproj" />
     <ProjectReference Include="..\Platform\Persistence\CustomsClearance.Platform.Persistence.csproj" />
     <ProjectReference Include="..\Platform\Messaging\CustomsClearance.Platform.Messaging.csproj" />
+    <ProjectReference Include="..\Platform\Observability\CustomsClearance.Platform.Observability.csproj" />
   </ItemGroup>
 
 </Project>

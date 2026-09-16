@@ -1,0 +1,16 @@
+# Day 27 - tells Grafana to auto-load any dashboard JSON file dropped into
+# observability/dashboards/, so "Dashboard showing service health/latency"
+# (the Day 27 deliverable) is reproducible via `docker compose up`, same
+# provisioning discipline as Day 26's Loki datasource.
+
+apiVersion: 1
+
+providers:
+  - name: "CustomsClearance"
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

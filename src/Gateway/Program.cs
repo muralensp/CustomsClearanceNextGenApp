@@ -25,6 +25,7 @@
 using System.Threading.RateLimiting;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.Logging;
+using CustomsClearance.Platform.Observability;
 using CustomsClearance.Platform.Security;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -39,6 +40,7 @@ builder.Services.AddReverseProxy()
 
 builder.Services.AddCustomsClearanceAuthentication(builder.Configuration);
 builder.Services.AddCustomsClearanceAuthorization();
+builder.Services.AddCustomsClearanceMetrics("CustomsClearance.Gateway");
 
 // Basic rate limiting (Day 22 deliverable): fixed window per client IP.
 // Values are a conservative dev-time default, not a tuned production
@@ -71,6 +73,12 @@ app.UseAuthorization();
 // "gateway routes hello-world service"). Mapped before MapReverseProxy's
 // catch-all so routing picks the more specific match first.
 app.MapGet("/__gateway/health", () => Results.Ok(new { status = "Healthy", service = "CustomsClearance.Gateway" }));
+
+// Day 27: Prometheus scrape endpoint ("/metrics") - the gateway's own
+// metrics, distinct from the Api host's (which Prometheus scrapes
+// separately at http://api:8080/metrics, an internal-only address). Also
+// mapped before the catch-all for the same reason as /__gateway/health.
+app.MapCustomsClearanceMetricsEndpoint();
 
 app.MapReverseProxy();
 

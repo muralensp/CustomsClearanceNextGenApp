@@ -246,6 +246,7 @@ instruction to begin.
 | 24 | Event Bus — real RabbitMQ swap for `InMemoryEventBus` (`RabbitMqEventBus`/`RabbitMqEventConsumer`), sample event flow proven end-to-end incl. CI smoke-test | `adr/0018-*.md`, `src/Platform/Messaging/RabbitMq*.cs`, `Day24_Execution_Log.md` | ADR-0018 |
 | 25 | Base Security Framework — gateway now performs its own JWT validation (defense-in-depth) via YARP per-route `AuthorizationPolicy`, proven independent of the `Api` host's own enforcement | `adr/0019-*.md`, `src/Gateway/appsettings.json`, `Day25_Execution_Log.md` | ADR-0019 |
 | 26 | Structured Logging Rollout — JSON console logging (`Api`/`Gateway`) + Loki/Promtail/Grafana centralized log view, proven queryable by CorrelationId across the full publish→consume lifecycle | `adr/0020-*.md`, `observability/`, `src/Platform/Logging/LoggingBuilderExtensions.cs`, `Day26_Execution_Log.md` | ADR-0020 |
+| 27 | Monitoring & Metrics — OpenTelemetry + Prometheus (`Platform.Observability`), provisioned Grafana dashboard (health/latency/error-rate), queries verified against real metric names, not guessed | `adr/0021-*.md`, `src/Platform/Observability/`, `observability/dashboards/`, `Day27_Execution_Log.md` | ADR-0021 |
 
 ### Day 21 — Environment & Containerization
 
@@ -483,3 +484,43 @@ modified**: `src/Api/Program.cs`, `src/Gateway/Program.cs`, `docker-compose.yml`
 **Status**: Complete. Days 26-29 (Observability) are explicitly parallelizable per the Day-Wise
 Plan, with Day 30 as the mandatory sequential wiring/review step. Next unstarted item is **Day 27
 — Monitoring & Metrics**, pending explicit instruction to begin.
+
+### Day 27 — Monitoring & Metrics
+
+**Decision**: Confirmed **OpenTelemetry .NET + Prometheus exporter** over `prometheus-net` —
+Microsoft's current recommended instrumentation path, built-in ASP.NET Core HTTP metrics with no
+custom code. New shared `Platform.Observability` library (`AddCustomsClearanceMetrics(serviceName)`
++ `MapCustomsClearanceMetricsEndpoint()`), wired into both `Api` and `Gateway` the same way every
+other `AddCustomsClearance*` cross-cutting concern is. `docker-compose.yml` gained `prometheus`
+(scrapes both services' `/metrics` internally); Grafana (from Day 26) gained a second datasource
+and a **provisioned dashboard** (`observability/dashboards/api-gateway-overview.json`) — 5 panels
+covering Service Up, Request Rate, p95 Latency, Error Rate, Active Requests.
+
+**Discipline point**: brought the stack up *first* and queried Prometheus's own
+`/api/v1/label/__name__/values` to confirm the real OpenTelemetry-exported metric names before
+writing a single dashboard query — semantic-convention metric names have shifted across
+instrumentation versions, so guessing from docs risked a broken/empty panel that looks fine until
+someone opens it.
+
+**Verification**: both scrape targets reported healthy in Prometheus; generated real traffic; every
+panel's exact PromQL query, run through Grafana's own datasource proxy (not Prometheus directly),
+returned real non-zero data — including a plausible latency difference between gateway (~35ms,
+its own Day 25 auth/rate-limit overhead) and api (~5ms). CI smoke-test and full-solution
+build/format/test all clean, unpiped.
+
+**Recurring issue, this time fully root-caused**: the Day 26 RabbitMQ startup crash recurred twice
+more — traced fully this time (not just pruned) to an unrelated, months-old orphaned container
+holding a colliding Docker volume, unconnected to this project. Removed explicitly; no
+recurrence after. Documented as machine-specific leftover state, not a project config issue.
+
+**Files added**: `src/Platform/Observability/` (csproj, `ServiceCollectionExtensions.cs`,
+`ApplicationBuilderExtensions.cs`), `observability/prometheus.yml`,
+`observability/grafana-dashboards-provider.yaml`, `observability/dashboards/api-gateway-
+overview.json`, `adr/0021-monitoring-and-metrics.md`,
+`Phase-1_Architecture_Engineering_Prep/Day27_Execution_Log.md`. **Files modified**:
+`src/Api/Program.cs`, `src/Api/CustomsClearance.Api.csproj`, `src/Api/Dockerfile`,
+`src/Gateway/Program.cs`, `src/Gateway/CustomsClearance.Gateway.csproj`, `src/Gateway/Dockerfile`,
+`observability/grafana-datasources.yaml`, `docker-compose.yml`, `CustomsClearance.sln`.
+
+**Status**: Complete. Next unstarted item is **Day 28 — Distributed Tracing**, pending explicit
+instruction to begin.

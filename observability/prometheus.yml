@@ -1,0 +1,16 @@
+# Day 27 - scrapes /metrics from both running services directly on the
+# docker-compose internal network (api:8080, gateway:8080 - the same
+# addresses the gateway's own reverse-proxy config and Promtail/Loki
+# already use for this project's other cross-container wiring).
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "customsclearance-api"
+    static_configs:
+      - targets: ["api:8080"]
+
+  - job_name: "customsclearance-gateway"
+    static_configs:
+      - targets: ["gateway:8080"]

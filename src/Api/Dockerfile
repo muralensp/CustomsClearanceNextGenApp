@@ -18,6 +18,7 @@ COPY src/Platform/Security/CustomsClearance.Platform.Security.csproj src/Platfor
 COPY src/Platform/Audit/CustomsClearance.Platform.Audit.csproj src/Platform/Audit/
 COPY src/Platform/Persistence/CustomsClearance.Platform.Persistence.csproj src/Platform/Persistence/
 COPY src/Platform/Messaging/CustomsClearance.Platform.Messaging.csproj src/Platform/Messaging/
+COPY src/Platform/Observability/CustomsClearance.Platform.Observability.csproj src/Platform/Observability/
 
 RUN dotnet restore src/Api/CustomsClearance.Api.csproj
 
@@ -29,6 +30,7 @@ COPY src/Platform/Security/ src/Platform/Security/
 COPY src/Platform/Audit/ src/Platform/Audit/
 COPY src/Platform/Persistence/ src/Platform/Persistence/
 COPY src/Platform/Messaging/ src/Platform/Messaging/
+COPY src/Platform/Observability/ src/Platform/Observability/
 
 RUN dotnet publish src/Api/CustomsClearance.Api.csproj -c Release -o /app --no-restore
 

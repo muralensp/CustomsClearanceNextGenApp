@@ -12,6 +12,7 @@ COPY src/Platform/Common/CustomsClearance.Platform.Common.csproj src/Platform/Co
 COPY src/Platform/Logging/CustomsClearance.Platform.Logging.csproj src/Platform/Logging/
 COPY src/Platform/ErrorHandling/CustomsClearance.Platform.ErrorHandling.csproj src/Platform/ErrorHandling/
 COPY src/Platform/Security/CustomsClearance.Platform.Security.csproj src/Platform/Security/
+COPY src/Platform/Observability/CustomsClearance.Platform.Observability.csproj src/Platform/Observability/
 
 RUN dotnet restore src/Gateway/CustomsClearance.Gateway.csproj
 
@@ -20,6 +21,7 @@ COPY src/Platform/Common/ src/Platform/Common/
 COPY src/Platform/Logging/ src/Platform/Logging/
 COPY src/Platform/ErrorHandling/ src/Platform/ErrorHandling/
 COPY src/Platform/Security/ src/Platform/Security/
+COPY src/Platform/Observability/ src/Platform/Observability/
 
 RUN dotnet publish src/Gateway/CustomsClearance.Gateway.csproj -c Release -o /app --no-restore
 

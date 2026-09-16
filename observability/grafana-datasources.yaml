@@ -1,6 +1,9 @@
 # Day 26 - provisions the Loki datasource automatically on Grafana startup,
 # so "centralized log view" is reproducible via `docker compose up` rather
 # than a manual point-and-click setup step every time the stack is rebuilt.
+#
+# Day 27 - adds the Prometheus datasource the same way, for the "service
+# health/latency" dashboard (dashboards.yaml + api-gateway-overview.json).
 
 apiVersion: 1
 
@@ -10,3 +13,9 @@ datasources:
     access: proxy
     url: http://loki:3100
     isDefault: true
+
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: false
