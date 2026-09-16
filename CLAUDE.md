@@ -257,6 +257,7 @@ instruction to begin.
 |---|---|---|---|
 | 31 | Rules Engine: Storage Model — Rule/RuleVersion/RuleCondition schema migrated against real PostgreSQL, two real bugs found and fixed (wrong DbContext resolved via DI; JSON serialization cycle) | `adr/0025-*.md`, `src/Platform/RulesEngine/`, `Day31_Execution_Log.md` | ADR-0025 |
 | 32 | Rules Engine: Evaluation Pipeline — EfRuleSetLoader/ConditionEvaluator/PriorityResolver/RulesEngine orchestration, 45 unit tests (100%/97.53% coverage), proven live against a real Postgres-loaded rule via a new diagnostic endpoint | `adr/0026-*.md`, `src/Platform/RulesEngine/RulesEngine.cs`, `Day32_Execution_Log.md` | ADR-0026 |
+| 33 | Rules Engine: Versioning & Decision Trace — real persisted DecisionTrace entity replacing Day 32's in-memory placeholder, proven queryable via a new diagnostic endpoint; corrupted local RabbitMQ image root-caused (different from prior days' stray-volume findings) | `adr/0027-*.md`, `src/Platform/RulesEngine/DecisionTrace.cs`, `Day33_Execution_Log.md` | ADR-0027 |
 
 ### Day 21 — Environment & Containerization
 
@@ -725,5 +726,45 @@ in `tests/Unit/Platform.RulesEngine.Tests/`, `adr/0026-rules-engine-evaluation-p
 `Phase-1_Architecture_Engineering_Prep/Day32_Execution_Log.md`. **Files modified**:
 `src/Api/Program.cs`, `tests/Unit/Platform.RulesEngine.Tests/CustomsClearance.Platform.RulesEngine.Tests.csproj`.
 
-**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item is **Day 33
-— Rules Engine: Versioning & Decision Trace**, pending explicit instruction to begin.
+**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item was **Day 33
+— Rules Engine: Versioning & Decision Trace**.
+
+### Day 33 — Rules Engine: Versioning & Decision Trace
+
+**Decision**: Versioning itself was already built Day 31; Day 33's real scope was replacing Day
+32's `InMemoryDecisionTraceRecorder` placeholder with real, persisted trace capture. New
+`DecisionTrace` entity — one row per pipeline stage per evaluation, grouped by an indexed
+`EvaluationId`, `RuleId`/`RuleVersionId` nullable with `OnDelete(SetNull)` (not cascade — a trace
+row is an audit record that must outlive the Rule/RuleVersion it referenced, ADR-0004),
+`FactsSnapshotJson` storing the open-ended Facts bag as JSON text. Corrected a Day 32 deviation
+from ADR-0013's own spec along the way: `IDecisionTraceRecorder.Flush()` was sync; the original
+design always specified async `FlushAsync` — fixed now that persistence needs `SaveChangesAsync`.
+`EfDecisionTraceRecorder` buffers rows per step, one `SaveChangesAsync` per evaluation.
+`RulesEngine.EvaluateAsync` now generates and returns an `EvaluationId` per run. New `GET
+/diagnostics/rules/trace/{evaluationId}` endpoint proves the trace is independently queryable.
+
+**Verification — the literal deliverable, live against real PostgreSQL**: evaluated a real seeded
+rule, then queried its trace back out by `EvaluationId` — **9 real persisted rows**, correctly
+ordered, winning stage showing real `RuleId`/`RuleVersionId`, `FactsSnapshotJson` correctly
+capturing the cross-stage `ClearanceType` mutation from stage 5 onward. Direct `psql` query
+confirmed 18 rows (two evaluations) and the real `ON DELETE SET NULL` FK constraints. 50 unit
+tests (up from 45), 100%/97.75% coverage. Full-solution build/format/test and CI smoke-test all
+clean, unpiped.
+
+**Real environmental issue, different root cause than Days 26/27/30**: the familiar
+`.erlang.cookie: eacces` RabbitMQ crash recurred against a *provably fresh* volume this time (not
+stray leftover state) — root-caused instead to a corrupted local copy of the
+`rabbitmq:3.13-management-alpine` image itself; `docker rmi -f` + re-pull resolved it permanently.
+Restarting Docker Desktop alone did not fix it, confirming the image was the actual cause.
+
+**Files added**: `src/Platform/RulesEngine/DecisionTrace.cs`,
+`src/Platform/RulesEngine/EfDecisionTraceRecorder.cs`,
+`tests/Unit/Platform.RulesEngine.Tests/EfDecisionTraceRecorderTests.cs`,
+`adr/0027-rules-engine-versioning-and-decision-trace.md`,
+`Phase-1_Architecture_Engineering_Prep/Day33_Execution_Log.md`. **Files modified**:
+`src/Platform/RulesEngine/RulesDbContext.cs`, `src/Platform/RulesEngine/IDecisionTraceRecorder.cs`,
+`src/Platform/RulesEngine/RulesEngine.cs`, `src/Platform/RulesEngine/ServiceCollectionExtensions.cs`,
+`src/Api/Program.cs`.
+
+**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item is **Day 34
+— Rules Engine: Admin API (minimal)**, pending explicit instruction to begin.

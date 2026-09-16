@@ -464,10 +464,39 @@ if (app.Environment.IsDevelopment())
 
             return Results.Ok(new
             {
+                evaluationId = result.EvaluationId,
                 clearanceType = result.Facts["ClearanceType"],
                 trace = result.Trace.Select(step => new { step.StepOrder, step.StepName, step.RuleCode, step.Outcome }),
             });
         }).WithName("DiagnosticsEvaluateRules");
+
+        // Day 33: the actual deliverable ("decision trace visible for a
+        // test rule evaluation") - proves EfDecisionTraceRecorder's rows
+        // are genuinely queryable back out of PostgreSQL by EvaluationId,
+        // independent of the in-process result the evaluate call above
+        // already returned. A real caller (e.g. a later compliance-review
+        // screen) would use exactly this query shape.
+        app.MapGet("/diagnostics/rules/trace/{evaluationId:guid}", async (Guid evaluationId, RulesDbContext dbContext) =>
+        {
+            var steps = await dbContext.DecisionTraces
+                .Where(t => t.EvaluationId == evaluationId)
+                .OrderBy(t => t.StepOrder)
+                .Select(t => new
+                {
+                    t.StepOrder,
+                    t.StepName,
+                    t.RuleId,
+                    t.RuleVersionId,
+                    t.Outcome,
+                    t.SubjectId,
+                    SubjectType = t.SubjectType.ToString(),
+                    t.EvaluationDate,
+                    t.FactsSnapshotJson,
+                })
+                .ToListAsync();
+
+            return steps.Count == 0 ? Results.NotFound() : Results.Ok(steps);
+        }).WithName("DiagnosticsGetRuleTrace");
 
         app.MapGet("/diagnostics/rules/{id:guid}", async (Guid id, RulesDbContext dbContext) =>
         {

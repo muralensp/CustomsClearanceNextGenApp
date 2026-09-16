@@ -3,11 +3,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace CustomsClearance.Platform.RulesEngine;
 
 /// <summary>
-/// Registers the Day 32 evaluation pipeline behind RulesDbContext, same
+/// Registers the evaluation pipeline behind RulesDbContext, same
 /// AddCustomsClearance* convention as every other cross-cutting library.
-/// IDecisionTraceRecorder registers the Day 32 in-memory implementation -
-/// Day 33 replaces this binding with a real EF-backed one without
-/// changing RulesEngine's constructor or any calling code.
+/// IDecisionTraceRecorder now resolves to EfDecisionTraceRecorder (Day 33)
+/// - real, persisted trace capture - replacing Day 32's in-memory
+/// placeholder without any change to RulesEngine's constructor or the
+/// interface itself, exactly as ADR-0013/ADR-0026 anticipated.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -16,7 +17,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRuleSetLoader, EfRuleSetLoader>();
         services.AddSingleton<IConditionEvaluator, ConditionEvaluator>();
         services.AddSingleton<IPriorityResolver, PriorityResolver>();
-        services.AddScoped<IDecisionTraceRecorder, InMemoryDecisionTraceRecorder>();
+        services.AddScoped<IDecisionTraceRecorder, EfDecisionTraceRecorder>();
         services.AddScoped<RulesEngine>();
 
         return services;

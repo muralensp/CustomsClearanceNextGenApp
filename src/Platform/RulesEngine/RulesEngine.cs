@@ -1,7 +1,7 @@
 namespace CustomsClearance.Platform.RulesEngine;
 
-/// <summary>Final Facts state plus the per-stage trace of how it was reached (ADR-0013).</summary>
-public sealed record SegregationResult(Facts Facts, IReadOnlyList<DecisionTraceStep> Trace);
+/// <summary>Final Facts state plus the per-stage trace of how it was reached (ADR-0013). EvaluationId is the key a caller re-queries the persisted trace by later (Day 33).</summary>
+public sealed record SegregationResult(Guid EvaluationId, Facts Facts, IReadOnlyList<DecisionTraceStep> Trace);
 
 /// <summary>
 /// Orchestrates the 5-stage pipeline ADR-0013 designed (Facts assembly ->
@@ -28,6 +28,8 @@ public sealed class RulesEngine
 
     public async Task<SegregationResult> EvaluateAsync(EvaluationContext context, Facts facts, CancellationToken cancellationToken = default)
     {
+        var evaluationId = Guid.NewGuid();
+
         foreach (var stage in PipelineStages.Ordered)
         {
             var candidates = await _loader.LoadAsync(stage.Categories, context.EvaluationDate, cancellationToken);
@@ -36,7 +38,7 @@ public sealed class RulesEngine
                 .ToList();
 
             var winner = _resolver.Resolve(fired);
-            _tracer.RecordStep(winner, facts, stage.StepOrder, stage.Name);
+            _tracer.RecordStep(evaluationId, context, winner, facts, stage.StepOrder, stage.Name);
 
             if (winner is not null)
             {
@@ -49,6 +51,7 @@ public sealed class RulesEngine
             }
         }
 
-        return new SegregationResult(facts, _tracer.Flush());
+        var trace = await _tracer.FlushAsync(cancellationToken);
+        return new SegregationResult(evaluationId, facts, trace);
     }
 }

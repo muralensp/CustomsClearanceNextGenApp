@@ -24,6 +24,8 @@ public sealed class RulesDbContext : PlatformDbContext
 
     public DbSet<RuleCondition> RuleConditions => Set<RuleCondition>();
 
+    public DbSet<DecisionTrace> DecisionTraces => Set<DecisionTrace>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -61,6 +63,33 @@ public sealed class RulesDbContext : PlatformDbContext
         modelBuilder.Entity<RuleCondition>(condition =>
         {
             condition.Property(c => c.Operator).HasConversion<string>();
+        });
+
+        modelBuilder.Entity<DecisionTrace>(trace =>
+        {
+            // Every row from one evaluation is looked up together (Day 33's
+            // "decision trace visible for a test rule evaluation"
+            // deliverable) - an index on EvaluationId makes that a real
+            // index scan, not a table scan.
+            trace.HasIndex(t => t.EvaluationId);
+            trace.Property(t => t.SubjectType).HasConversion<string>();
+
+            // No FK-driven cascade delete here (unlike Rule -> RuleVersion
+            // -> RuleCondition): a DecisionTrace is an audit record that
+            // must survive independent of the Rule/RuleVersion it
+            // referenced (ADR-0004/PRD Ch.5.13). SetNull on delete rather
+            // than Restrict, since the trace's own StepName/Outcome/
+            // FactsSnapshotJson remain meaningful even if the referenced
+            // RuleId/RuleVersionId can no longer be resolved.
+            trace.HasOne<Rule>()
+                .WithMany()
+                .HasForeignKey(t => t.RuleId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            trace.HasOne<RuleVersion>()
+                .WithMany()
+                .HasForeignKey(t => t.RuleVersionId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
