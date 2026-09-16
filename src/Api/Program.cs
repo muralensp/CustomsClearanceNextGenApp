@@ -26,6 +26,10 @@ using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Day 26: structured (JSON) console logging, for centralized log
+// aggregation (Loki/Promtail/Grafana, see docker-compose.yml).
+builder.Logging.AddCustomsClearanceStructuredLogging();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCustomsClearanceAuthentication(builder.Configuration);

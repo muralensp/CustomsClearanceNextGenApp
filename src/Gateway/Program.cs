@@ -30,6 +30,10 @@ using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Day 26: structured (JSON) console logging, for centralized log
+// aggregation (Loki/Promtail/Grafana, see docker-compose.yml).
+builder.Logging.AddCustomsClearanceStructuredLogging();
+
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 

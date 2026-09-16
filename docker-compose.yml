@@ -22,6 +22,17 @@
 # (appsettings.Development.json, for `dotnet run` outside a container)
 # split as postgres. The management UI (15672) is published for the "event
 # bus operational" proof (queue/exchange visible), not required at runtime.
+#
+# Day 26: "loki"/"promtail"/"grafana" centralize log output. api/gateway now
+# emit structured JSON to stdout (Platform.Logging's
+# AddCustomsClearanceStructuredLogging); promtail scrapes every container's
+# json-file log driver output via Docker service discovery (see
+# observability/promtail-config.yaml) and ships it to loki; grafana comes
+# pre-provisioned with loki as a datasource (observability/grafana-
+# datasources.yaml) so the log view is reproducible via `docker compose up`,
+# not a manual setup step. Anonymous Grafana access (below) is a dev-only
+# convenience, same posture as every other LOCAL-DEV-ONLY placeholder in
+# this stack - never a real security decision.
 
 services:
   gateway:
@@ -88,6 +99,36 @@ services:
       interval: 2s
       timeout: 5s
       retries: 15
+
+  loki:
+    image: grafana/loki:2.9.8
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    volumes:
+      - ./observability/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    ports:
+      - "3000:3000"
+    environment:
+      # Dev-only convenience (no login screen) - not a production posture.
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+    depends_on:
+      - loki
 
 volumes:
   postgres-dev-data:

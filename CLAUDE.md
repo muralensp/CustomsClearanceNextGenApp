@@ -245,6 +245,7 @@ instruction to begin.
 | 23 | Identity & Access — in-house login (`POST /auth/login`) issuing role-based JWTs, Postgres-backed dev-persona users, proven end-to-end incl. wrong-role 403 | `adr/0017-*.md`, `src/Api/Identity/`, `src/Platform/Security/ITokenIssuer.cs`, `Day23_Execution_Log.md` | ADR-0017 |
 | 24 | Event Bus — real RabbitMQ swap for `InMemoryEventBus` (`RabbitMqEventBus`/`RabbitMqEventConsumer`), sample event flow proven end-to-end incl. CI smoke-test | `adr/0018-*.md`, `src/Platform/Messaging/RabbitMq*.cs`, `Day24_Execution_Log.md` | ADR-0018 |
 | 25 | Base Security Framework — gateway now performs its own JWT validation (defense-in-depth) via YARP per-route `AuthorizationPolicy`, proven independent of the `Api` host's own enforcement | `adr/0019-*.md`, `src/Gateway/appsettings.json`, `Day25_Execution_Log.md` | ADR-0019 |
+| 26 | Structured Logging Rollout — JSON console logging (`Api`/`Gateway`) + Loki/Promtail/Grafana centralized log view, proven queryable by CorrelationId across the full publish→consume lifecycle | `adr/0020-*.md`, `observability/`, `src/Platform/Logging/LoggingBuilderExtensions.cs`, `Day26_Execution_Log.md` | ADR-0020 |
 
 ### Day 21 — Environment & Containerization
 
@@ -446,3 +447,39 @@ across two fresh container cycles.
 
 **Status**: Complete. Next unstarted item is **Day 26 — Structured Logging Rollout** (start of
 Week 6, Observability), pending explicit instruction to begin.
+
+### Day 26 — Structured Logging Rollout
+
+**Decision**: `CorrelationIdMiddleware` (Day 16) was already wired into both running services —
+the real gap was centralization, since both `Api` and `Gateway` still emitted plain-text console
+output with nothing aggregating it. Confirmed with the user: **Grafana Loki + Promtail + Grafana**
+(over ELK's heavier Elasticsearch footprint) and **.NET's built-in JSON console formatter** (over
+adopting Serilog, a new dependency this codebase has never used). Added
+`Platform.Logging.LoggingBuilderExtensions.AddCustomsClearanceStructuredLogging()` — one line in
+each service's `Program.cs`. `docker-compose.yml` gained `loki`, `promtail` (Docker
+service-discovery scraping, relabeled by `compose_service`), and `grafana` (Loki pre-provisioned
+as a datasource via `observability/grafana-datasources.yaml`, so the log view is reproducible via
+`docker compose up` alone — no manual click-through setup).
+
+**Verification**: real JSON log output confirmed via `docker logs`; generated traffic tagged with
+a known CorrelationId; **queried Loki directly** and got back both the publish and handle log
+lines carrying that same CorrelationId — proving Promtail shipped logs and Loki indexed them
+correctly; **queried through Grafana's own datasource proxy** (the actual view a user would use,
+not just the Loki API) and got real results, with the datasource already provisioned with zero
+manual setup. CI's `smoke-test.sh` and full-solution build/format/test all re-confirmed clean,
+unpiped.
+
+**Environmental issue found (not a design bug)**: a stray leftover Docker volume (from an earlier
+interrupted session) caused RabbitMQ to crash at startup on the first fresh-environment attempt —
+isolated via `docker volume prune`, confirmed unrelated to this day's actual changes, documented
+in ADR-0020 since it briefly looked like a regression.
+
+**Files added**: `src/Platform/Logging/LoggingBuilderExtensions.cs`,
+`tests/Unit/Platform.Logging.Tests/LoggingBuilderExtensionsTests.cs`, `observability/`
+(`promtail-config.yaml`, `grafana-datasources.yaml`), `adr/0020-structured-logging-and-log-
+centralization.md`, `Phase-1_Architecture_Engineering_Prep/Day26_Execution_Log.md`. **Files
+modified**: `src/Api/Program.cs`, `src/Gateway/Program.cs`, `docker-compose.yml`.
+
+**Status**: Complete. Days 26-29 (Observability) are explicitly parallelizable per the Day-Wise
+Plan, with Day 30 as the mandatory sequential wiring/review step. Next unstarted item is **Day 27
+— Monitoring & Metrics**, pending explicit instruction to begin.

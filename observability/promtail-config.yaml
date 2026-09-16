@@ -1,0 +1,29 @@
+# Day 26 - Promtail scrapes every docker-compose container's stdout (json-file
+# log driver) via Docker service discovery, and ships it to Loki. Relabels
+# by the container's docker-compose service name so Grafana queries can
+# filter with {compose_service="api"} etc., rather than the generated
+# container hash name.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: "container"
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: "compose_service"
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: "logstream"

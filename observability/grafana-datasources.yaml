@@ -1,0 +1,12 @@
+# Day 26 - provisions the Loki datasource automatically on Grafana startup,
+# so "centralized log view" is reproducible via `docker compose up` rather
+# than a manual point-and-click setup step every time the stack is rebuilt.
+
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
