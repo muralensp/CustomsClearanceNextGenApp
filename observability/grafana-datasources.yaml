@@ -4,6 +4,13 @@
 #
 # Day 27 - adds the Prometheus datasource the same way, for the "service
 # health/latency" dashboard (dashboards.yaml + api-gateway-overview.json).
+#
+# Day 28 - adds the Tempo datasource for distributed traces, plus
+# tracesToLogsV2 (Tempo trace -> Loki logs, matched on the same
+# correlation_id span tag every span is enriched with, against the
+# CorrelationId field every log line already carries - Day 16/26) so a
+# trace can be pivoted to its exact request's log lines from one shared
+# correlation key.
 
 apiVersion: 1
 
@@ -19,3 +26,17 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: false
+
+  - name: Tempo
+    type: tempo
+    uid: Tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: false
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: Loki
+        filterByTraceID: false
+        filterBySpanID: false
+        customQuery: true
+        query: '{compose_service=~"api|gateway"} |= "$${__span.tags.correlation_id}"'

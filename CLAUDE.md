@@ -247,6 +247,7 @@ instruction to begin.
 | 25 | Base Security Framework — gateway now performs its own JWT validation (defense-in-depth) via YARP per-route `AuthorizationPolicy`, proven independent of the `Api` host's own enforcement | `adr/0019-*.md`, `src/Gateway/appsettings.json`, `Day25_Execution_Log.md` | ADR-0019 |
 | 26 | Structured Logging Rollout — JSON console logging (`Api`/`Gateway`) + Loki/Promtail/Grafana centralized log view, proven queryable by CorrelationId across the full publish→consume lifecycle | `adr/0020-*.md`, `observability/`, `src/Platform/Logging/LoggingBuilderExtensions.cs`, `Day26_Execution_Log.md` | ADR-0020 |
 | 27 | Monitoring & Metrics — OpenTelemetry + Prometheus (`Platform.Observability`), provisioned Grafana dashboard (health/latency/error-rate), queries verified against real metric names, not guessed | `adr/0021-*.md`, `src/Platform/Observability/`, `observability/dashboards/`, `Day27_Execution_Log.md` | ADR-0021 |
+| 28 | Distributed Tracing — OpenTelemetry tracing + Grafana Tempo, spans tagged with the existing CorrelationId, proven as one real multi-span trace spanning the Gateway→Api hop, queryable via Grafana's own datasource proxy | `adr/0022-*.md`, `src/Platform/Observability/`, `observability/tempo.yaml`, `Day28_Execution_Log.md` | ADR-0022 |
 
 ### Day 21 — Environment & Containerization
 
@@ -522,5 +523,45 @@ overview.json`, `adr/0021-monitoring-and-metrics.md`,
 `src/Gateway/Program.cs`, `src/Gateway/CustomsClearance.Gateway.csproj`, `src/Gateway/Dockerfile`,
 `observability/grafana-datasources.yaml`, `docker-compose.yml`, `CustomsClearance.sln`.
 
-**Status**: Complete. Next unstarted item is **Day 28 — Distributed Tracing**, pending explicit
-instruction to begin.
+**Status**: Complete. Next unstarted item was **Day 28 — Distributed Tracing**.
+
+### Day 28 — Distributed Tracing
+
+**Decision**: Confirmed **Grafana Tempo** over Jaeger — stays inside the existing Grafana stack
+(Loki/Prometheus from Days 26/27) rather than adding a second query UI. `Platform.Observability`
+gained `AddCustomsClearanceTracing(serviceName, otlpEndpoint)` — ASP.NET Core + HttpClient
+instrumentation (the latter turns the Gateway's YARP-proxied call to `Api` into a real child span,
+not two disconnected traces), every span tagged with the existing `X-Correlation-Id`
+(`CorrelationIdMiddleware`, Day 16) via a new `Platform.Observability` → `Platform.Logging`
+`ProjectReference`, exported via OTLP to Tempo. Both `Api`/`Gateway` wired the same way as every
+other `AddCustomsClearance*` cross-cutting concern. `docker-compose.yml` gained `tempo`
+(`observability/tempo.yaml`, local-disk single-binary config); Grafana gained a third datasource
+with `tracesToLogsV2` pointed at Loki on the same `correlation_id` key, so a trace pivots straight
+to its request's log lines.
+
+**Verification**: real Gateway→Api request generated with a known correlation ID; Tempo's own
+`/api/search?tags=correlation_id=...` found the trace; the full trace showed **three spans across
+two services** (Gateway inbound, Gateway outbound/proxy hop, Api inbound) proving genuine
+cross-service propagation; re-queried through **Grafana's own datasource proxy** (not Tempo
+directly) with the same result. Prometheus's Day 27 scrape targets confirmed unaffected. CI
+smoke-test and full-solution build/format/test all clean, unpiped.
+
+**Recurring issue, same category as Days 26/27, resolved fast**: the first `docker compose up` hit
+the same `.erlang.cookie: eacces` RabbitMQ crash — this time a leftover anonymous Docker volume
+(not an orphaned container, per Day 27's finding), found via `docker ps -a`/`docker volume ls`
+inspection and removed; RabbitMQ started healthy on the very next `up` with no further changes.
+
+**Note**: `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.9.0 carries a `NU1902` moderate advisory
+(disk-retry blob injection) — investigated and confirmed not exploitable here, since this project
+never sets `OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY=disk`. Left un-upgraded to avoid breaking
+compatibility with the pinned Prometheus exporter beta package (Day 27); documented in
+`adr/0022-distributed-tracing.md` for future revisit.
+
+**Files added**: `observability/tempo.yaml`, `adr/0022-distributed-tracing.md`,
+`Phase-1_Architecture_Engineering_Prep/Day28_Execution_Log.md`. **Files modified**:
+`src/Platform/Observability/ServiceCollectionExtensions.cs`,
+`src/Platform/Observability/CustomsClearance.Platform.Observability.csproj`, `src/Api/Program.cs`,
+`src/Gateway/Program.cs`, `observability/grafana-datasources.yaml`, `docker-compose.yml`.
+
+**Status**: Complete. Next unstarted item is **Day 29 — Alerting**, pending explicit instruction
+to begin.

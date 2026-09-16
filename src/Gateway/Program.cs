@@ -42,6 +42,14 @@ builder.Services.AddCustomsClearanceAuthentication(builder.Configuration);
 builder.Services.AddCustomsClearanceAuthorization();
 builder.Services.AddCustomsClearanceMetrics("CustomsClearance.Gateway");
 
+// Day 28: distributed tracing, exported via OTLP to Tempo. HttpClient
+// instrumentation (Platform.Observability) captures YARP's proxied call to
+// the Api host as a child span, so one trace shows gateway -> api end to
+// end for a single request.
+builder.Services.AddCustomsClearanceTracing(
+    "CustomsClearance.Gateway",
+    builder.Configuration["Otlp:Endpoint"] ?? "http://localhost:4317");
+
 // Basic rate limiting (Day 22 deliverable): fixed window per client IP.
 // Values are a conservative dev-time default, not a tuned production
 // policy - production limits are a Phase 0 Day 26-30 (Observability/

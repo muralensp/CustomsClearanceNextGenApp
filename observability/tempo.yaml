@@ -1,0 +1,28 @@
+# Day 28 - minimal single-binary Tempo config for local dev. Receives OTLP
+# traces on gRPC 4317 (matches Platform.Observability's AddOtlpExporter
+# default protocol) and serves queries (Grafana's Tempo datasource) on the
+# built-in HTTP API, port 3200. Local disk storage only - dev/CI scale, same
+# posture as every other LOCAL-DEV-ONLY piece of this stack (no retention/
+# replication tuning).
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tmp/tempo/traces
+    wal:
+      path: /tmp/tempo/wal
+
+compactor:
+  compaction:
+    block_retention: 24h

@@ -39,6 +39,13 @@ builder.Services.AddCustomsClearanceTokenIssuance(builder.Configuration);
 builder.Services.AddCustomsClearanceAudit();
 builder.Services.AddCustomsClearanceMetrics("CustomsClearance.Api");
 
+// Day 28: distributed tracing, exported via OTLP to Tempo (docker-
+// compose.yml's "tempo" service). Same "Host=tempo" (compose DNS) vs.
+// "Host=localhost" (dotnet run) split as every other infra dependency.
+builder.Services.AddCustomsClearanceTracing(
+    "CustomsClearance.Api",
+    builder.Configuration["Otlp:Endpoint"] ?? "http://localhost:4317");
+
 // Day 24: real event bus (RabbitMQ) when configured, InMemoryEventBus
 // otherwise - same "absence means skip" convention as ConnectionStrings:
 // DiagnosticsDb/IdentityDb, and required by ADR-0009 (integration tests

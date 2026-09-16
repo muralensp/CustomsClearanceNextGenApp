@@ -40,6 +40,14 @@
 # (Prometheus, alongside Loki) plus a provisioned dashboard
 # (observability/dashboards/api-gateway-overview.json) - same
 # zero-manual-setup provisioning discipline as Day 26.
+#
+# Day 28: "tempo" receives OpenTelemetry traces from api/gateway
+# (Platform.Observability's AddCustomsClearanceTracing) via OTLP gRPC
+# (4317), per observability/tempo.yaml. Grafana gets a third datasource
+# (Tempo, alongside Loki/Prometheus) - same provisioning discipline.
+# Otlp__Endpoint below points both services at Host=tempo (compose DNS);
+# appsettings.Development.json's default (Host=localhost) covers `dotnet
+# run` against docker-compose's tempo port mapping.
 
 services:
   gateway:
@@ -52,8 +60,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ReverseProxy__Clusters__api-cluster__Destinations__api-destination__Address=http://api:8080/
+      - Otlp__Endpoint=http://tempo:4317
     depends_on:
       - api
+      - tempo
 
   api:
     build:
@@ -65,11 +75,14 @@ services:
       - ConnectionStrings__DiagnosticsDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__IdentityDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - RabbitMq__HostName=rabbitmq
+      - Otlp__Endpoint=http://tempo:4317
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      tempo:
+        condition: service_started
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -139,6 +152,7 @@ services:
     depends_on:
       - loki
       - prometheus
+      - tempo
 
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -146,6 +160,15 @@ services:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    command: -config.file=/etc/tempo/tempo.yaml
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
+    ports:
+      - "4317:4317"
+      - "3200:3200"
 
 volumes:
   postgres-dev-data:
