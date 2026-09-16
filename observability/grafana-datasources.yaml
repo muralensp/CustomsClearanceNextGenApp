@@ -11,6 +11,11 @@
 # CorrelationId field every log line already carries - Day 16/26) so a
 # trace can be pivoted to its exact request's log lines from one shared
 # correlation key.
+#
+# Day 29 - Prometheus gets an explicit uid ("Prometheus", matching Tempo's
+# existing explicit-uid pattern above) so observability/alerting/rules.yaml
+# can reference it deterministically rather than relying on Grafana's
+# auto-generated uid.
 
 apiVersion: 1
 
@@ -23,6 +28,7 @@ datasources:
 
   - name: Prometheus
     type: prometheus
+    uid: Prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: false
