@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+
 namespace CustomsClearance.Platform.ErrorHandling;
 
 /// <summary>
@@ -9,6 +11,7 @@ namespace CustomsClearance.Platform.ErrorHandling;
 public static class ErrorMapper
 {
     private const string _validationFailedType = "https://api.customsclearance.india/errors/validation-failed";
+    private const string _malformedRequestType = "https://api.customsclearance.india/errors/malformed-request";
     private const string _unexpectedErrorType = "https://api.customsclearance.india/errors/unexpected";
 
     public static ProblemDetailsResponse Map(Exception exception, string? instancePath, string? correlationId)
@@ -27,6 +30,26 @@ public static class ErrorMapper
                 Instance: instancePath,
                 CorrelationId: correlationId,
                 Errors: errors);
+        }
+
+        // A malformed request body (invalid JSON, wrong types, an unknown
+        // enum string) - the client's mistake, not the server's - is a 400,
+        // not the generic 500 below. Found for real (Day 34 live
+        // verification): Minimal API's RequestDelegateFactory throws
+        // BadHttpRequestException for exactly this case, and without this
+        // branch it fell through to the unexpected-error/500 path, hiding a
+        // client-fixable mistake behind a response that looked like a
+        // server bug.
+        if (exception is BadHttpRequestException badRequestEx)
+        {
+            return new ProblemDetailsResponse(
+                Type: _malformedRequestType,
+                Title: "The request could not be understood",
+                Status: StatusCodes.BadRequest,
+                Detail: badRequestEx.Message,
+                Instance: instancePath,
+                CorrelationId: correlationId,
+                Errors: null);
         }
 
         // Unknown/unhandled exceptions never leak internal details (stack
@@ -49,6 +72,7 @@ public static class ErrorMapper
 
 internal static class StatusCodes
 {
+    public const int BadRequest = 400;
     public const int UnprocessableEntity = 422;
     public const int InternalServerError = 500;
 }

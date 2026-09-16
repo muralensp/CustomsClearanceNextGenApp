@@ -1,10 +1,29 @@
 using CustomsClearance.Platform.ErrorHandling;
+using Microsoft.AspNetCore.Http;
 using Xunit;
 
 namespace CustomsClearance.Platform.ErrorHandling.Tests;
 
 public class ErrorMapperTests
 {
+    [Fact]
+    public void Map_BadHttpRequestException_ReturnsBadRequestNotInternalServerError()
+    {
+        // Day 34 finding: a malformed request body (e.g. an unparseable
+        // JSON enum value) previously fell through to the generic 500
+        // "unexpected error" branch, hiding a client-fixable mistake
+        // behind a response that looked like a server bug.
+        var exception = new BadHttpRequestException("Failed to read parameter \"CreateRuleRequest request\" from the request body as JSON.");
+
+        var result = ErrorMapper.Map(exception, "/api/rules", "corr-3");
+
+        Assert.Equal(400, result.Status);
+        Assert.Equal("corr-3", result.CorrelationId);
+        Assert.Equal("/api/rules", result.Instance);
+        Assert.Null(result.Errors);
+        Assert.Contains("could not be understood", result.Title);
+    }
+
     [Fact]
     public void Map_DomainValidationException_ReturnsUnprocessableEntityWithBusinessRuleCode()
     {

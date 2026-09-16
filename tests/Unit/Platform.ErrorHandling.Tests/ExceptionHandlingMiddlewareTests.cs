@@ -65,6 +65,20 @@ public class ExceptionHandlingMiddlewareTests
     }
 
     [Fact]
+    public async Task BadHttpRequestException_MapsToBadRequestNotInternalServerError()
+    {
+        var (statusCode, body, correlationHeader) = await InvokeAsync(
+            _ => throw new Microsoft.AspNetCore.Http.BadHttpRequestException("malformed body"),
+            requestCorrelationId: "test-corr-badreq");
+
+        Assert.Equal(400, statusCode);
+        Assert.Equal("test-corr-badreq", correlationHeader);
+
+        var parsed = JsonSerializer.Deserialize<JsonElement>(body);
+        Assert.Equal("test-corr-badreq", parsed.GetProperty("correlationId").GetString());
+    }
+
+    [Fact]
     public async Task UnknownException_MapsToInternalServerErrorWithoutLeakingMessage()
     {
         var (statusCode, body, _) = await InvokeAsync(

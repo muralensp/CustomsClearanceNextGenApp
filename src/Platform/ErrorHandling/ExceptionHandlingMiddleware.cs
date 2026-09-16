@@ -44,6 +44,13 @@ public class ExceptionHandlingMiddleware
                 // Expected, business-rule-driven failure - Warning, not Error.
                 _logger.LogWarning(ex, "Business rule validation failed. CorrelationId={CorrelationId}", correlationId);
             }
+            else if (ex is Microsoft.AspNetCore.Http.BadHttpRequestException)
+            {
+                // A malformed request body is a client mistake, not a
+                // server fault - Warning, not Error, same as
+                // DomainValidationException above.
+                _logger.LogWarning(ex, "Malformed request. CorrelationId={CorrelationId}", correlationId);
+            }
             else
             {
                 // Unexpected failure - the full exception (including stack
