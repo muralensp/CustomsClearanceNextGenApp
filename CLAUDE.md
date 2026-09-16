@@ -259,6 +259,7 @@ instruction to begin.
 | 32 | Rules Engine: Evaluation Pipeline — EfRuleSetLoader/ConditionEvaluator/PriorityResolver/RulesEngine orchestration, 45 unit tests (100%/97.53% coverage), proven live against a real Postgres-loaded rule via a new diagnostic endpoint | `adr/0026-*.md`, `src/Platform/RulesEngine/RulesEngine.cs`, `Day32_Execution_Log.md` | ADR-0026 |
 | 33 | Rules Engine: Versioning & Decision Trace — real persisted DecisionTrace entity replacing Day 32's in-memory placeholder, proven queryable via a new diagnostic endpoint; corrupted local RabbitMQ image root-caused (different from prior days' stray-volume findings) | `adr/0027-*.md`, `src/Platform/RulesEngine/DecisionTrace.cs`, `Day33_Execution_Log.md` | ADR-0027 |
 | 34 | Rules Engine: Admin API (minimal) — real RequireAdmin-gated CRUD API for rules; two real bugs fixed (enum JSON binding, malformed-request 500→400); RabbitMQ startup race finally root-caused and fixed with a self-healing restart policy + CI retry, not another one-off workaround | `adr/0028-*.md`, `src/Api/RulesAdmin/`, `Day34_Execution_Log.md` | ADR-0028 |
+| 35 | Rules Engine Review — 3 real India-specific sample rules (De Minimis gift imports, HS Code 9018 controlled goods, Permit) loaded through the real Day 34 admin API, evaluated via a new multi-fact diagnostic endpoint; first live proof of ADR-0013's mutable-Facts cross-stage chaining | `adr/0029-*.md`, `Day35_Execution_Log.md` | ADR-0029 |
 
 ### Day 21 — Environment & Containerization
 
@@ -818,5 +819,41 @@ consecutive fresh cycles, the first self-healing fix in this recurring saga (Day
 `docker-compose.yml`, `build/scripts/smoke-test.sh`, plus new tests in
 `Platform.ErrorHandling.Tests`.
 
-**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item is **Day 35
-— Rules Engine Review**, pending explicit instruction to begin.
+**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item was **Day 35
+— Rules Engine Review**.
+
+### Day 35 — Rules Engine Review
+
+**Decision**: Found a real gap before any rule could be usefully evaluated — every existing
+evaluation entry point (`POST /diagnostics/rules/evaluate`, Day 32) only ever supplied one
+hardcoded fact (`ShipmentValue`), which cannot prove ADR-0013's central design claim that `Facts`
+is deliberately mutable in place so a later pipeline stage reacts to an earlier stage's outcome.
+Added `POST /diagnostics/rules/evaluate-facts` (accepts an arbitrary fact dictionary, runs the
+real `RulesEngine` pipeline) alongside the unchanged Day 32 endpoint. Loaded **three real
+India-specific sample rules through the actual Day 34 admin API** (not hand-seeded): `IN-DEM-
+GIFT-001` (De Minimis — individual gift imports under INR 5000, reflecting India's CBIC
+gift-import policy), `IN-HS-CONTROLLED-9018` (HS Code 9018 medical/surgical instruments — import-
+restricted, sets `ControlledGoodsFlag`), and `IN-PERMIT-CONTROLLED-001` (Permit — fires only when
+`ControlledGoodsFlag` is set by an earlier stage, the deliberate proof of cross-stage chaining).
+
+**Verification — first real proof of ADR-0013's mutable-Facts design, not just each day's own
+isolated proof**: Scenario A (individual gift, value 2500) → `ClearanceType: "DEM"` via
+`IN-DEM-GIFT-001`. Scenario B (commercial, HS code 9018, value 50000) → `ControlledGoodsFlag:
+"true"` at the HS Code stage **and** `PermitRequired: "true"` at the later Permit stage — the
+Permit rule fired purely because an earlier stage mutated Facts, something a single-fact evaluate
+call could never demonstrate. Both evaluations' persisted decision traces independently re-queried
+via the Day 33 trace endpoint and a direct `psql` count — 9 real rows each, correct `RuleId`/
+`RuleVersionId` on the winning steps. Deactivated `IN-DEM-GIFT-001` via the Day 34 admin API and
+re-ran Scenario A — `ClearanceType` correctly stopped firing, closing the loop across all five
+days again. RabbitMQ's Day 34 self-healing fix (`restart: on-failure:5`) was exercised for real
+this session (first `docker compose up` hit the first-boot race; a plain retry succeeded with zero
+manual intervention). Full-solution build/format/test and the actual CI `smoke-test.sh` all clean,
+unpiped.
+
+**Files added**: `adr/0029-rules-engine-review.md`,
+`Phase-1_Architecture_Engineering_Prep/Day35_Execution_Log.md`. **Files modified**:
+`src/Api/Program.cs` (new `evaluate-facts` diagnostic endpoint).
+
+**Status**: Complete. Week 7 (Days 31-35, Rules Engine Skeleton) is fully complete as a
+cross-validated set. Next unstarted item is whatever Phase 0 schedules next, pending explicit
+instruction to begin.

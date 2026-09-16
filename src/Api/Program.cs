@@ -495,6 +495,35 @@ if (app.Environment.IsDevelopment())
             });
         }).WithName("DiagnosticsEvaluateRules");
 
+        // Day 35 (Rules Engine Review): the Day 32 endpoint above only
+        // ever supplies one fact (ShipmentValue), which can't exercise
+        // cross-stage chaining (e.g. an HS Code rule setting
+        // ControlledGoodsFlag for a later Permit rule to read) - the
+        // exact behavior ADR-0013 built Facts as mutable-in-place to
+        // support. This accepts an arbitrary fact bag so real
+        // India-specific sample rules loaded through the actual Day 34
+        // admin API (not hand-seeded here) can be evaluated end to end.
+        app.MapPost("/diagnostics/rules/evaluate-facts", async (
+            Dictionary<string, string> facts,
+            RulesEngine engine) =>
+        {
+            var factBag = new Facts();
+            foreach (var (factName, value) in facts)
+            {
+                factBag[factName] = value;
+            }
+
+            var context = new EvaluationContext(Guid.NewGuid(), SubjectType.Shipment, DateOnly.FromDateTime(DateTime.UtcNow));
+            var result = await engine.EvaluateAsync(context, factBag);
+
+            return Results.Ok(new
+            {
+                evaluationId = result.EvaluationId,
+                facts = result.Facts.Snapshot(),
+                trace = result.Trace.Select(step => new { step.StepOrder, step.StepName, step.RuleCode, step.Outcome }),
+            });
+        }).WithName("DiagnosticsEvaluateRulesWithFacts");
+
         // Day 33: the actual deliverable ("decision trace visible for a
         // test rule evaluation") - proves EfDecisionTraceRecorder's rows
         // are genuinely queryable back out of PostgreSQL by EvaluationId,
