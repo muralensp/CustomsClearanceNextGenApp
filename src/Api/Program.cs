@@ -13,6 +13,7 @@
 
 using CustomsClearance.Api.Diagnostics;
 using CustomsClearance.Api.Identity;
+using CustomsClearance.Api.RulesAdmin;
 using CustomsClearance.Platform.Audit;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.Logging;
@@ -34,6 +35,17 @@ builder.Logging.AddCustomsClearanceStructuredLogging();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Day 34 finding: Minimal API's default JSON binding rejects enum values
+// sent as strings (e.g. "category": "DeMinimis") - System.Text.Json's
+// built-in enum converter expects a number unless a JsonStringEnumConverter
+// is registered. Found for real via the first live POST /api/rules call
+// (a raw BadHttpRequestException, not a clean validation error). Since the
+// Day-Wise Plan's own deliverable wording is "testable via Postman/
+// Swagger" - a human typing "DeMinimis" into Swagger, not an enum's
+// integer value - string enum binding is required, not optional.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddCustomsClearanceAuthentication(builder.Configuration);
 builder.Services.AddCustomsClearanceAuthorization();
 builder.Services.AddCustomsClearanceTokenIssuance(builder.Configuration);
@@ -287,6 +299,19 @@ if (!string.IsNullOrWhiteSpace(identityConnectionString))
         var issued = tokenIssuer.IssueToken(user.Id, user.Username, user.Role);
         return Results.Ok(new LoginResponse(issued.AccessToken, issued.ExpiresAtUtc, user.Role));
     }).WithName("Login");
+}
+
+// Day 34: the real (not diagnostic) minimal Rules admin API - create/
+// update/deactivate a Rule, add a new RuleVersion. Same connection-
+// string-presence guard as every RulesDb-dependent endpoint (Minimal
+// API's RequestDelegateFactory validates parameter bindability at MAP
+// time, so this must only be mapped when RulesDbContext is registered).
+// RequireAdmin-gated (confirmed with the user) - this changes real
+// compliance policy, the same category of consequential action as
+// /diagnostics/secure.
+if (!string.IsNullOrWhiteSpace(rulesConnectionString))
+{
+    app.MapRuleAdminEndpoints();
 }
 
 // Development-only diagnostic endpoints proving the platform libraries work

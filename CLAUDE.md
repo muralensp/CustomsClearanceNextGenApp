@@ -258,6 +258,7 @@ instruction to begin.
 | 31 | Rules Engine: Storage Model — Rule/RuleVersion/RuleCondition schema migrated against real PostgreSQL, two real bugs found and fixed (wrong DbContext resolved via DI; JSON serialization cycle) | `adr/0025-*.md`, `src/Platform/RulesEngine/`, `Day31_Execution_Log.md` | ADR-0025 |
 | 32 | Rules Engine: Evaluation Pipeline — EfRuleSetLoader/ConditionEvaluator/PriorityResolver/RulesEngine orchestration, 45 unit tests (100%/97.53% coverage), proven live against a real Postgres-loaded rule via a new diagnostic endpoint | `adr/0026-*.md`, `src/Platform/RulesEngine/RulesEngine.cs`, `Day32_Execution_Log.md` | ADR-0026 |
 | 33 | Rules Engine: Versioning & Decision Trace — real persisted DecisionTrace entity replacing Day 32's in-memory placeholder, proven queryable via a new diagnostic endpoint; corrupted local RabbitMQ image root-caused (different from prior days' stray-volume findings) | `adr/0027-*.md`, `src/Platform/RulesEngine/DecisionTrace.cs`, `Day33_Execution_Log.md` | ADR-0027 |
+| 34 | Rules Engine: Admin API (minimal) — real RequireAdmin-gated CRUD API for rules; two real bugs fixed (enum JSON binding, malformed-request 500→400); RabbitMQ startup race finally root-caused and fixed with a self-healing restart policy + CI retry, not another one-off workaround | `adr/0028-*.md`, `src/Api/RulesAdmin/`, `Day34_Execution_Log.md` | ADR-0028 |
 
 ### Day 21 — Environment & Containerization
 
@@ -766,5 +767,56 @@ Restarting Docker Desktop alone did not fix it, confirming the image was the act
 `src/Platform/RulesEngine/RulesEngine.cs`, `src/Platform/RulesEngine/ServiceCollectionExtensions.cs`,
 `src/Api/Program.cs`.
 
-**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item is **Day 34
-— Rules Engine: Admin API (minimal)**, pending explicit instruction to begin.
+**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item was **Day 34
+— Rules Engine: Admin API (minimal)**.
+
+### Day 34 — Rules Engine: Admin API (Minimal)
+
+**Decision**: Confirmed with the user — `/api/rules/*` requires Admin authorization
+(`PlatformPolicies.RequireAdmin`, same as `/diagnostics/secure`), and changing a rule's conditions/
+outcome goes through a separate "add new version" endpoint, not an in-place `PUT` overwrite (matches
+the effective-dated design). New `src/Api/RulesAdmin/RuleAdminEndpoints.cs` — create/list/get/
+update/deactivate/add-version, enforcing the two invariants ADR-0013/ADR-0025 explicitly deferred
+to this day: RuleCode uniqueness and no overlapping RuleVersion effective-date windows. The
+overlap/supersede logic was extracted into `RuleVersionEffectiveDateValidator`
+(`Platform.RulesEngine`) rather than left inline, so it's covered by that project's 95% gate.
+
+**Two real bugs found and fixed via first live test**: (1) `System.Text.Json`'s default enum
+converter rejected string values (`"category": "DeMinimis"`) sent by a real client — fixed by
+registering `JsonStringEnumConverter` globally, since the deliverable's own wording ("testable via
+Postman/Swagger") means humans typing strings, not raw enum integers. (2) The resulting
+`BadHttpRequestException` fell through to a generic 500 instead of a real 400 — fixed with a new
+`ErrorMapper` branch (benefits every endpoint in the Api host, not just this one), with unit tests
+added for both the mapper and the full middleware pipeline.
+
+**One real workflow gap found and fixed, confirmed with the user**: adding a new RuleVersion after
+an existing open-ended one was rejected as an "overlap" (correct per the literal invariant, but
+left no way to ever supersede a rule's policy). Confirmed **auto-close the prior open-ended
+version** — the standard effective-dating pattern, doesn't rewrite history since past evaluations/
+DecisionTrace rows are unaffected. 8 new unit tests cover the supersede case and genuine-conflict
+edge cases.
+
+**Verification — closing the loop across the whole week**: full live JWT-authenticated CRUD flow
+(401/201/422/200 all correct), then **a real evaluation via Day 32's pipeline confirmed a
+deactivated rule no longer fires** — Days 31-34 proven working together, not just in isolation.
+
+**RabbitMQ startup race, finally root-caused and fixed for good**: recurred again (even against a
+named volume, tried first and alone insufficient); a plain `docker start` retry against the same
+already-created volume succeeded every time, proving a one-time first-boot race rather than
+corrupted/stray state. Fixed with `restart: on-failure:5` on the rabbitmq service plus a 3-attempt
+retry wrapper around `docker compose up` in `build/scripts/smoke-test.sh` — verified clean across 6
+consecutive fresh cycles, the first self-healing fix in this recurring saga (Days 26/27/30/33).
+
+**Files added**: `src/Api/RulesAdmin/RuleAdminEndpoints.cs`,
+`src/Api/RulesAdmin/RuleAdminModels.cs`,
+`src/Platform/RulesEngine/RuleVersionEffectiveDateValidator.cs`,
+`tests/Unit/Platform.RulesEngine.Tests/RuleVersionEffectiveDateValidatorTests.cs`,
+`adr/0028-rules-engine-admin-api.md`,
+`Phase-1_Architecture_Engineering_Prep/Day34_Execution_Log.md`. **Files modified**:
+`src/Platform/ErrorHandling/ErrorMapper.cs`,
+`src/Platform/ErrorHandling/ExceptionHandlingMiddleware.cs`, `src/Api/Program.cs`,
+`docker-compose.yml`, `build/scripts/smoke-test.sh`, plus new tests in
+`Platform.ErrorHandling.Tests`.
+
+**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item is **Day 35
+— Rules Engine Review**, pending explicit instruction to begin.
