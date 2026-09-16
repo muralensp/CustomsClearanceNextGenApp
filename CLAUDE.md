@@ -244,6 +244,7 @@ instruction to begin.
 | 22 | API Gateway — YARP gateway (`src/Gateway`) as sole published edge, routes to `Api` host's `/health`, rate limiting + auth passthrough proven live | `adr/0016-*.md`, `src/Gateway/`, `Day22_Execution_Log.md` | ADR-0016 |
 | 23 | Identity & Access — in-house login (`POST /auth/login`) issuing role-based JWTs, Postgres-backed dev-persona users, proven end-to-end incl. wrong-role 403 | `adr/0017-*.md`, `src/Api/Identity/`, `src/Platform/Security/ITokenIssuer.cs`, `Day23_Execution_Log.md` | ADR-0017 |
 | 24 | Event Bus — real RabbitMQ swap for `InMemoryEventBus` (`RabbitMqEventBus`/`RabbitMqEventConsumer`), sample event flow proven end-to-end incl. CI smoke-test | `adr/0018-*.md`, `src/Platform/Messaging/RabbitMq*.cs`, `Day24_Execution_Log.md` | ADR-0018 |
+| 25 | Base Security Framework — gateway now performs its own JWT validation (defense-in-depth) via YARP per-route `AuthorizationPolicy`, proven independent of the `Api` host's own enforcement | `adr/0019-*.md`, `src/Gateway/appsettings.json`, `Day25_Execution_Log.md` | ADR-0019 |
 
 ### Day 21 — Environment & Containerization
 
@@ -410,3 +411,38 @@ TestApiFactory.cs`, `build/scripts/smoke-test.sh`.
 
 **Status**: Complete. Next unstarted item is **Day 25 — Base Security Framework**, pending
 explicit instruction to begin.
+
+### Day 25 — Base Security Framework
+
+**Decision**: Day 25's "wire security-lib into gateway" wording read as extending ADR-0016's Day
+22 pass-through-only decision, not just re-proving it — confirmed with the user: the gateway now
+performs its own **real JWT validation** (defense-in-depth), independent of the `Api` host's own
+enforcement, not a replacement for it. `src/Gateway` gained a `Platform.Security` reference,
+`AddCustomsClearanceAuthentication`/`AddCustomsClearanceAuthorization` +
+`UseAuthentication`/`UseAuthorization`, and the same `"Jwt"` config section as the `Api` host (one
+token validates at both). Per-route enforcement via **YARP's native `AuthorizationPolicy` route
+config** (no custom middleware) — split the gateway's one catch-all route into a specific
+`diagnostics-secure-route` (`AuthorizationPolicy: RequireAdmin`) ahead of the unchanged catch-all,
+scoped to the one existing protected sample endpoint per the plan's own singular wording, not a
+blanket "everything requires auth" policy (which would have blocked `/auth/login` itself).
+
+**Verification — full defense-in-depth matrix proven live**: no token → 401 at the gateway; wrong
+role (broker) → 403 at the gateway; tampered token (broken signature) → 401 at the gateway;
+correct role (admin) → 200, passing both layers. Confirmed the rejections genuinely happen *at the
+gateway* — the `Api` host's own audit log shows exactly one successful request, proving the other
+three attempts never reached it. `/health`/`/auth/login` remained open throughout. CI's
+`smoke-test.sh` (Postgres + RabbitMQ round-trips, Days 18/24) unaffected, full-solution
+build/format/test clean, all with unpiped exit codes.
+
+**Recurring finding (not new)**: Day 24's RabbitMQ startup-race retry budget (10×2s=20s)
+occasionally insufficient — increased to 20×2s=40s in `RabbitMqConnectionHelper`, re-verified
+across two fresh container cycles.
+
+**Files added**: `adr/0019-base-security-framework.md`,
+`Phase-1_Architecture_Engineering_Prep/Day25_Execution_Log.md`. **Files modified**:
+`src/Gateway/CustomsClearance.Gateway.csproj`, `src/Gateway/Program.cs`,
+`src/Gateway/appsettings.json`, `src/Gateway/Dockerfile`,
+`src/Platform/Messaging/RabbitMqConnectionHelper.cs` (retry budget).
+
+**Status**: Complete. Next unstarted item is **Day 26 — Structured Logging Rollout** (start of
+Week 6, Observability), pending explicit instruction to begin.

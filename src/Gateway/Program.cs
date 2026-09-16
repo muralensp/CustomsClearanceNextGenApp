@@ -2,10 +2,19 @@
 // (Yarp.ReverseProxy), per Day6_API_Standards_v1.1.docx Section 2: the
 // gateway is the sole external ingress point; the Api host itself is not
 // published on the docker-compose network's host ports (see
-// docker-compose.yml). Internal auth (JWT, Platform.Security) still happens
-// at the Api host - the gateway passes the Authorization header through
-// unmodified, it does not perform auth itself (basic auth passthrough,
-// per the Day 22 deliverable).
+// docker-compose.yml).
+//
+// Day 25 - Base Security Framework: the gateway now performs its own JWT
+// Bearer validation (Platform.Security), not just header passthrough.
+// Routes carrying an "AuthorizationPolicy" in ReverseProxy:Routes config
+// (appsettings.json) are rejected with 401/403 here, before ever reaching
+// the Api host - genuine defense-in-depth, not a duplicate of the Api
+// host's own enforcement (which still runs too; both layers use the same
+// PlatformPolicies/PlatformRoles from Platform.Security, so a token valid
+// at the gateway is valid at the Api host and vice versa). Routes with no
+// AuthorizationPolicy configured remain open at the gateway layer - the
+// Api host is still the source of truth for which of ITS endpoints
+// require auth; the gateway only pre-empts the ones explicitly marked.
 //
 // Correlation ID origination moves here too: this is the true request
 // ingress point, so CorrelationIdAccessor.Current (Platform.Logging) should
@@ -16,12 +25,16 @@
 using System.Threading.RateLimiting;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.Logging;
+using CustomsClearance.Platform.Security;
 using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+
+builder.Services.AddCustomsClearanceAuthentication(builder.Configuration);
+builder.Services.AddCustomsClearanceAuthorization();
 
 // Basic rate limiting (Day 22 deliverable): fixed window per client IP.
 // Values are a conservative dev-time default, not a tuned production
@@ -46,6 +59,8 @@ var app = builder.Build();
 app.UseCustomsClearanceCorrelationId();
 app.UseCustomsClearanceErrorHandling();
 app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
 
 // The gateway's own liveness check, distinct from the proxied "/health"
 // (which reaches the Api host's own /health per the Day 22 deliverable:

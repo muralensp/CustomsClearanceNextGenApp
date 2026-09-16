@@ -21,7 +21,7 @@ namespace CustomsClearance.Platform.Messaging;
 [ExcludeFromCodeCoverage(Justification = "Thin wrapper around real RabbitMQ network I/O - see RabbitMqEventBus's coverage-exclusion justification.")]
 internal static class RabbitMqConnectionHelper
 {
-    public static IConnection CreateConnectionWithRetry(IConnectionFactory factory, string clientProvidedName, ILogger logger, int maxAttempts = 10, int delayMilliseconds = 2000)
+    public static IConnection CreateConnectionWithRetry(IConnectionFactory factory, string clientProvidedName, ILogger logger, int maxAttempts = 20, int delayMilliseconds = 2000)
     {
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {

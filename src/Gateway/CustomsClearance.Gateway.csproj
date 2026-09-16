@@ -21,6 +21,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Platform\Logging\CustomsClearance.Platform.Logging.csproj" />
     <ProjectReference Include="..\Platform\ErrorHandling\CustomsClearance.Platform.ErrorHandling.csproj" />
+    <!-- Day 25: gateway now performs its own JWT validation for routes
+         marked with an AuthorizationPolicy in ReverseProxy:Routes config,
+         defense-in-depth ahead of the Api host's own enforcement. -->
+    <ProjectReference Include="..\Platform\Security\CustomsClearance.Platform.Security.csproj" />
   </ItemGroup>
 
 </Project>
