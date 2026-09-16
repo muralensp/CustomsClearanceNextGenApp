@@ -19,6 +19,7 @@ using CustomsClearance.Platform.Logging;
 using CustomsClearance.Platform.Messaging;
 using CustomsClearance.Platform.Observability;
 using CustomsClearance.Platform.Persistence;
+using CustomsClearance.Platform.RulesEngine;
 using CustomsClearance.Platform.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -84,6 +85,20 @@ var identityConnectionString = builder.Configuration.GetConnectionString("Identi
 if (!string.IsNullOrWhiteSpace(identityConnectionString))
 {
     builder.Services.AddDbContext<IdentityDbContext>(options => options.UseNpgsql(identityConnectionString));
+}
+
+// Day 31: RulesDbContext - real schema for ADR-0002/ADR-0013's Rule/
+// RuleVersion/RuleCondition model, same real-PostgreSQL-placeholder status
+// (and connection-string-presence-decides-registration convention) as
+// DiagnosticsDbContext/IdentityDbContext above. The evaluation pipeline
+// itself (IRuleSetLoader etc.) is Day 32 - this only proves the schema.
+var rulesConnectionString = builder.Configuration.GetConnectionString("RulesDb");
+if (!string.IsNullOrWhiteSpace(rulesConnectionString))
+{
+    builder.Services.AddDbContext<RulesDbContext>(options => options.UseNpgsql(rulesConnectionString));
+    builder.Services.AddScoped<RuleRepository>();
+    builder.Services.AddScoped<RuleVersionRepository>();
+    builder.Services.AddScoped<RuleConditionRepository>();
 }
 
 builder.Services.AddScoped<IEventHandler<DiagnosticsWidgetCreatedPayload>, DiagnosticsWidgetCreatedHandler>();
@@ -174,6 +189,47 @@ if (app.Environment.IsDevelopment())
             catch (Exception ex) when (attempt < maxAttempts)
             {
                 app.Logger.LogWarning(ex, "IdentityDb not ready (attempt {Attempt}/{MaxAttempts}), retrying in 2s...", attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+    }
+
+    // Same retry-with-backoff / EnsureCreatedAsync-then-CreateTablesAsync
+    // fallback reasoning as IdentityDb above (Day 23's finding: EnsureCreated
+    // only creates the physical database, not new tables, once the database
+    // already exists - true here too, since Diagnostics/Identity already
+    // created it).
+    if (!string.IsNullOrWhiteSpace(rulesConnectionString))
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var scope = app.Services.CreateScope();
+                var rulesDb = scope.ServiceProvider.GetRequiredService<RulesDbContext>();
+
+                var created = await rulesDb.Database.EnsureCreatedAsync();
+                if (!created)
+                {
+                    var databaseCreator = (Microsoft.EntityFrameworkCore.Storage.RelationalDatabaseCreator)
+                        rulesDb.GetService<Microsoft.EntityFrameworkCore.Storage.IDatabaseCreator>();
+                    try
+                    {
+                        await databaseCreator.CreateTablesAsync();
+                    }
+                    catch (Npgsql.PostgresException ex) when (ex.SqlState == Npgsql.PostgresErrorCodes.DuplicateTable)
+                    {
+                        // Already created by a previous run against this
+                        // same persisted volume - fine, not an error.
+                    }
+                }
+
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                app.Logger.LogWarning(ex, "RulesDb not ready (attempt {Attempt}/{MaxAttempts}), retrying in 2s...", attempt, maxAttempts);
                 await Task.Delay(TimeSpan.FromSeconds(2));
             }
         }
@@ -295,6 +351,102 @@ if (app.Environment.IsDevelopment())
             var widget = await repository.GetByIdAsync(id);
             return widget is null ? Results.NotFound() : Results.Ok(widget);
         }).WithName("DiagnosticsGetWidget");
+    }
+
+    // Day 31: proves RulesDbContext's real schema (Rule -> RuleVersion ->
+    // RuleCondition, with foreign keys) against real PostgreSQL - same
+    // dev-only diagnostic-endpoint proof pattern as Diagnostics/widgets
+    // above (Day 18) and IdentityDb (Day 23). Not a real admin API (that's
+    // Day 34) - just enough to prove the migrated schema round-trips a
+    // full Rule graph, including the RuleId/RuleVersionId foreign keys.
+    if (!string.IsNullOrWhiteSpace(rulesConnectionString))
+    {
+        app.MapPost("/diagnostics/rules", async (
+            RuleRepository ruleRepository,
+            RuleVersionRepository versionRepository,
+            RuleConditionRepository conditionRepository,
+            RulesDbContext dbContext) =>
+        {
+            var rule = new Rule
+            {
+                Id = Guid.NewGuid(),
+                RuleCode = $"DIAG-{Guid.NewGuid():N}"[..16],
+                Name = "Diagnostics sample rule",
+                Description = "Day 31 schema proof - not a real business rule.",
+                Category = RuleCategory.DeMinimis,
+                Priority = 9,
+            };
+            await ruleRepository.AddAsync(rule);
+
+            var version = new RuleVersion
+            {
+                Id = Guid.NewGuid(),
+                RuleId = rule.Id,
+                VersionNumber = 1,
+                EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+                EffectiveTo = null,
+                OutcomeFactName = "ClearanceType",
+                OutcomeValue = "DEM",
+            };
+            await versionRepository.AddAsync(version);
+
+            var condition = new RuleCondition
+            {
+                Id = Guid.NewGuid(),
+                RuleVersionId = version.Id,
+                FactName = "ShipmentValue",
+                Operator = ConditionOperator.LessThan,
+                Value = "5000",
+            };
+            await conditionRepository.AddAsync(condition);
+
+            await dbContext.SaveChangesAsync();
+
+            return Results.Ok(new { rule.Id, rule.RuleCode, VersionId = version.Id, ConditionId = condition.Id });
+        }).WithName("DiagnosticsCreateRule");
+
+        app.MapGet("/diagnostics/rules/{id:guid}", async (Guid id, RulesDbContext dbContext) =>
+        {
+            // Projected to an anonymous DTO, not the raw Rule entity: Rule
+            // <-> RuleVersion <-> RuleCondition's navigation properties are
+            // bidirectional (Rule.Versions / RuleVersion.Rule), which
+            // System.Text.Json's default serializer cannot walk - found for
+            // real (Day 31 live verification): a bare Results.Ok(rule)
+            // threw "A possible object cycle was detected" at the first
+            // GET. Real bounded-context endpoints (Day 34+ admin API) will
+            // need this same projection discipline, not raw entity returns.
+            var rule = await dbContext.Rules
+                .Where(r => r.Id == id)
+                .Select(r => new
+                {
+                    r.Id,
+                    r.RuleCode,
+                    r.Name,
+                    r.Description,
+                    Category = r.Category.ToString(),
+                    r.Priority,
+                    r.Active,
+                    Versions = r.Versions.Select(v => new
+                    {
+                        v.Id,
+                        v.VersionNumber,
+                        v.EffectiveFrom,
+                        v.EffectiveTo,
+                        v.OutcomeFactName,
+                        v.OutcomeValue,
+                        Conditions = v.Conditions.Select(c => new
+                        {
+                            c.Id,
+                            c.FactName,
+                            Operator = c.Operator.ToString(),
+                            c.Value,
+                        }),
+                    }),
+                })
+                .SingleOrDefaultAsync();
+
+            return rule is null ? Results.NotFound() : Results.Ok(rule);
+        }).WithName("DiagnosticsGetRule");
     }
 }
 

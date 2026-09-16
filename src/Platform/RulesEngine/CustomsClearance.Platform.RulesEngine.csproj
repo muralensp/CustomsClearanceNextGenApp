@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Day 31 (Phase 0, Week 7) - Rules Engine: Storage Model. Implements the
+    Rule/RuleVersion/RuleCondition schema ADR-0002/ADR-0013 designed
+    (Day 3 ER Diagram v0.2 Section 5), as real EF Core entities proven
+    against PostgreSQL. The evaluation pipeline itself (IRuleSetLoader,
+    IConditionEvaluator, etc., per ADR-0013) is Day 32 - this project is
+    schema only.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Persistence\CustomsClearance.Platform.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

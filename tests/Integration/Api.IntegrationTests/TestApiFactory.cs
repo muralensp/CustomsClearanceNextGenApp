@@ -7,9 +7,10 @@ namespace CustomsClearance.Api.IntegrationTests;
 /// <summary>
 /// Shared WebApplicationFactory customization for all integration tests in
 /// this project. Explicitly blanks ConnectionStrings:DiagnosticsDb,
-/// ConnectionStrings:IdentityDb (Day 23), and RabbitMq:HostName (Day 24)
-/// so Program.cs's `if (!string.IsNullOrWhiteSpace(...))` guards skip DB/
-/// broker registration and any startup connection attempt entirely.
+/// ConnectionStrings:IdentityDb (Day 23), ConnectionStrings:RulesDb
+/// (Day 31), and RabbitMq:HostName (Day 24) so Program.cs's
+/// `if (!string.IsNullOrWhiteSpace(...))` guards skip DB/broker
+/// registration and any startup connection attempt entirely.
 ///
 /// Why this exists (Day 18): WebApplicationFactory defaults its hosting
 /// environment to "Development" regardless of whether a test explicitly
@@ -49,6 +50,7 @@ public class TestApiFactory : WebApplicationFactory<Program>
         // string.IsNullOrWhiteSpace(connectionString) guard.
         Environment.SetEnvironmentVariable("ConnectionStrings__DiagnosticsDb", " ");
         Environment.SetEnvironmentVariable("ConnectionStrings__IdentityDb", " ");
+        Environment.SetEnvironmentVariable("ConnectionStrings__RulesDb", " ");
         Environment.SetEnvironmentVariable("RabbitMq__HostName", " ");
     }
 

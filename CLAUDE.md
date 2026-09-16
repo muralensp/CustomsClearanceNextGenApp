@@ -248,6 +248,14 @@ instruction to begin.
 | 26 | Structured Logging Rollout — JSON console logging (`Api`/`Gateway`) + Loki/Promtail/Grafana centralized log view, proven queryable by CorrelationId across the full publish→consume lifecycle | `adr/0020-*.md`, `observability/`, `src/Platform/Logging/LoggingBuilderExtensions.cs`, `Day26_Execution_Log.md` | ADR-0020 |
 | 27 | Monitoring & Metrics — OpenTelemetry + Prometheus (`Platform.Observability`), provisioned Grafana dashboard (health/latency/error-rate), queries verified against real metric names, not guessed | `adr/0021-*.md`, `src/Platform/Observability/`, `observability/dashboards/`, `Day27_Execution_Log.md` | ADR-0021 |
 | 28 | Distributed Tracing — OpenTelemetry tracing + Grafana Tempo, spans tagged with the existing CorrelationId, proven as one real multi-span trace spanning the Gateway→Api hop, queryable via Grafana's own datasource proxy | `adr/0022-*.md`, `src/Platform/Observability/`, `observability/tempo.yaml`, `Day28_Execution_Log.md` | ADR-0022 |
+| 29 | Alerting Basics — Grafana unified alerting (Service Down, High 5xx Error Rate), proven via a real forced failure/recovery state transition, notification delivery deliberately deferred (no real destination yet) | `adr/0023-*.md`, `observability/alerting/rules.yaml`, `Day29_Execution_Log.md` | ADR-0023 |
+| 30 | Observability Review — found and fixed a real gap (tracing never covered the RabbitMQ event bus, against Day 28's own stated scope); proved logs/metrics/traces/alerts all correlate for one real request that also produced one real event | `adr/0024-*.md`, `src/Platform/Messaging/MessagingTelemetry.cs`, `Day30_Execution_Log.md` | ADR-0024 |
+
+## Day-by-Day Deliverables Log (Phase 0, Week 7: Rules Engine Skeleton — Days 31-35, non-parallelizable)
+
+| Day | Deliverable | Key artifacts | ADR |
+|---|---|---|---|
+| 31 | Rules Engine: Storage Model — Rule/RuleVersion/RuleCondition schema migrated against real PostgreSQL, two real bugs found and fixed (wrong DbContext resolved via DI; JSON serialization cycle) | `adr/0025-*.md`, `src/Platform/RulesEngine/`, `Day31_Execution_Log.md` | ADR-0025 |
 
 ### Day 21 — Environment & Containerization
 
@@ -563,5 +571,114 @@ compatibility with the pinned Prometheus exporter beta package (Day 27); documen
 `src/Platform/Observability/CustomsClearance.Platform.Observability.csproj`, `src/Api/Program.cs`,
 `src/Gateway/Program.cs`, `observability/grafana-datasources.yaml`, `docker-compose.yml`.
 
-**Status**: Complete. Next unstarted item is **Day 29 — Alerting**, pending explicit instruction
-to begin.
+**Status**: Complete. Next unstarted item was **Day 29 — Alerting Basics**.
+
+### Day 29 — Alerting Basics
+
+**Decision**: Confirmed **Grafana's built-in unified alerting** over a separate Prometheus
+Alertmanager container — already running (Day 26's Grafana image), no new service, evaluates the
+same datasource queries Day 27's dashboard already proved correct. Confirmed **no real
+notification contact point** — no SMTP/webhook/Slack destination exists for this project yet
+(ADR-0008/0015's deliberate no-cloud-hosting-decision-yet posture); alerts are proven via evaluated
+**state** (Normal/Pending/Alerting) in Grafana's own Alerting UI/API, not a delivered notification.
+`observability/alerting/rules.yaml` (Grafana's file-based alert provisioning, same pattern as
+Days 26-28's datasources/dashboards) defines two rules, reusing Day 27's already-verified PromQL:
+**Service Down** (`up{job=~"customsclearance-.*"}` < 1, `severity: critical`) and **High 5xx Error
+Rate** (`severity: warning`). Prometheus datasource gained an explicit `uid: Prometheus` (matching
+Tempo's Day 28 pattern) so rules reference it deterministically. One new read-only volume mount on
+the existing `grafana` service — no new container.
+
+**Verification — a genuine forced state transition, not just clean provisioning**: stopped the
+`api` container; Prometheus's own `/api/v1/targets` confirmed the scrape target went down; waited
+through the scheduler tick + rule's `for: 30s`; the rules API confirmed **`Service Down` went
+`firing`/`Alerting`**, correctly labeled and timestamped. Restarted `api`; confirmed the rule
+returned to `inactive`/Normal — full Normal→Alerting→Normal round trip proven, not one-way. No
+RabbitMQ startup-race recurrence this day. CI smoke-test and full-solution build/format/test all
+clean, unpiped.
+
+**Files added**: `observability/alerting/rules.yaml`, `adr/0023-alerting-basics.md`,
+`Phase-1_Architecture_Engineering_Prep/Day29_Execution_Log.md`. **Files modified**:
+`observability/grafana-datasources.yaml`, `docker-compose.yml`.
+
+**Status**: Complete. Days 26-29 (Observability) are all individually complete. Next unstarted item
+was **Day 30 — the mandatory sequential wiring/review step** across all four.
+
+### Day 30 — Observability Review
+
+**Decision**: Reviewed Days 26-29 against the Day-Wise Plan's own Day 28 wording ("tracing across
+gateway → service → **event bus**") and found a real gap: Day 28's tracing never actually
+instrumented `RabbitMqEventBus`/`RabbitMqEventConsumer` (Day 24) — a request that triggered a
+domain event dropped out of its trace at the point of publish. **Fixed as part of this review**
+(Day 30 is explicitly the "wiring" step, not a passive audit): new `MessagingTelemetry`
+`ActivitySource` in `Platform.Messaging` (built-in `System.Diagnostics.Activity`, no new package
+dependency); `RabbitMqEventBus` now starts a Producer span and writes its W3C `traceparent` into a
+RabbitMQ message header; `RabbitMqEventConsumer` reads it back and starts a Consumer span parented
+to it — AMQP has no built-in trace-context carrier, so the header is the wire mechanism.
+`AddCustomsClearanceTracing` gained `.AddSource(MessagingTelemetry.ActivitySourceName)` (without it
+the OTel SDK silently ignores the custom source) — new `Platform.Observability` →
+`Platform.Messaging` `ProjectReference`, and `src/Gateway/Dockerfile` gained a `COPY` step for
+`Platform.Messaging` (the Gateway didn't previously build against it).
+
+**Verification — one real request that also produced one real event**: `POST
+/diagnostics/widgets` (chosen because it logs, gets scraped, publishes an event, and can be
+traced — unlike a bare `/health` call). **Logs**: same `CorrelationId` found on both the "Published
+event" and "HANDLED event" lines. **Traces**: one Tempo trace with **five spans** — Gateway
+inbound → Gateway outbound (proxy) → Api inbound → `DiagnosticsWidgetCreated publish` (producer) →
+`DiagnosticsWidgetCreated receive` (consumer) — the event-bus hop now genuinely part of the trace.
+**Metrics**: Prometheus confirmed the real request was counted. **Alerts**: both Day 29 rules
+stayed `inactive`/Normal against real traffic. All four signals cross-referenced by the same
+correlation key for the same request/event — the literal deliverable. `Platform.Messaging`'s
+coverage gate held (94.56%/80%) with no new test project needed. CI smoke-test and full-solution
+build/format/test all clean, unpiped. No RabbitMQ startup-race recurrence this day.
+
+**Files added**: `src/Platform/Messaging/MessagingTelemetry.cs`, `adr/0024-observability-review.md`,
+`Phase-1_Architecture_Engineering_Prep/Day30_Execution_Log.md`. **Files modified**:
+`src/Platform/Messaging/RabbitMqEventBus.cs`, `src/Platform/Messaging/RabbitMqEventConsumer.cs`,
+`src/Platform/Observability/ServiceCollectionExtensions.cs`,
+`src/Platform/Observability/CustomsClearance.Platform.Observability.csproj`,
+`src/Gateway/Dockerfile`.
+
+**Status**: Complete. Days 26-30 (Week 6, Observability) are fully complete as a cross-validated
+set. Per the Day-Wise Plan, Week 7 (Days 31-35, Rules Engine Skeleton) is explicitly marked
+non-parallelizable (a strict build chain). Next unstarted item was **Day 31 — Rules Engine: Storage
+Model**.
+
+### Day 31 — Rules Engine: Storage Model
+
+**Decision**: New `Platform.RulesEngine` library implementing ADR-0002/ADR-0013's
+Rule/RuleVersion/RuleCondition schema (Day 3 ER Diagram v0.2 §5) as real EF Core entities. `Rule`
+(RuleCode unique, Category, Priority, Active — soft-deactivation only), `RuleVersion`
+(effective-dated; `OutcomeFactName`/`OutcomeValue` generalizes the Day 19 spike's
+clearance-type-only field, since later PRD stages react to arbitrary Facts flags a rule sets),
+`RuleCondition` (Operator enum extended to all 6 ADR-0013 named — spike only had 4).
+`RulesDbContext` uses the same `EnsureCreatedAsync`/`CreateTablesAsync`-fallback pattern as
+Diagnostics/Identity (no EF Migrations pipeline in this codebase); unique indexes on `RuleCode` and
+`(RuleId, VersionNumber)`; cascade deletes. Wired into `Api` the same connection-string-presence
+convention as `DiagnosticsDb`/`IdentityDb`. New `Platform.RulesEngine.Tests` (InMemory provider,
+95% core-tier coverage gate per ADR-0007 — Rules Engine is core business logic, not CRUD) achieved
+97.14%/100%.
+
+**Two real bugs found via live verification, not assumed from a clean build**: (1) repositories
+accepted the abstract `PlatformDbContext`, which the Api host has only one DI registration for
+(pointing at `DiagnosticsDbContext`) — silently resolved the wrong context, throwing "Cannot create
+a DbSet for 'Rule'" on first insert; fixed by accepting the concrete `RulesDbContext` instead. (2)
+returning the raw `Rule` entity graph from the diagnostic GET endpoint threw a JSON serialization
+cycle (`Rule.Versions` ↔ `RuleVersion.Rule` bidirectional navigation); fixed by projecting to a DTO
+— flagged as a discipline the real Day 34 admin API will also need.
+
+**Verification**: `docker logs api` confirmed 5 real `CREATE TABLE` statements incl. both cascade
+FKs; `POST`/`GET /diagnostics/rules` round-tripped a full Rule→RuleVersion→RuleCondition graph
+after both fixes; direct `psql \d` inspection confirmed the unique indexes/FKs exist as real
+Postgres constraints, not just C# annotations. Full-solution build/format/test and CI smoke-test
+all clean, unpiped. No RabbitMQ startup-race recurrence.
+
+**Files added**: `src/Platform/RulesEngine/` (csproj, `Rule.cs`, `RuleVersion.cs`,
+`RuleCondition.cs`, `RuleCategory.cs`, `ConditionOperator.cs`, `RulesDbContext.cs`,
+`RuleRepository.cs`), `tests/Unit/Platform.RulesEngine.Tests/`, `adr/0025-rules-engine-storage-
+model.md`, `Phase-1_Architecture_Engineering_Prep/Day31_Execution_Log.md`. **Files modified**:
+`src/Api/Program.cs`, `src/Api/CustomsClearance.Api.csproj`, `src/Api/Dockerfile`,
+`src/Api/appsettings.Development.json`, `docker-compose.yml`,
+`tests/Integration/Api.IntegrationTests/TestApiFactory.cs`, `CustomsClearance.sln`.
+
+**Status**: Complete. Per the Day-Wise Plan's strict build chain, next unstarted item is **Day 32
+— Rule Evaluation Pipeline**, pending explicit instruction to begin.
