@@ -105,6 +105,22 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    # Day 34 finding, revised: switching to a named volume (below) did NOT
+    # fix the recurring /var/lib/rabbitmq/.erlang.cookie eacces crash
+    # (Days 26/27/30/33) - it recurred even against this fresh named
+    # volume. Root cause confirmed this time: a one-time race at brand-
+    # new-volume first boot on this machine's Docker Desktop/WSL2 setup
+    # (the entrypoint's chown of .erlang.cookie loses a race once in a
+    # while) - a plain `docker start` retry against the SAME
+    # already-created volume (no recreate) succeeds immediately every
+    # time. `restart: on-failure` makes Compose retry automatically
+    # instead of requiring a manual restart each time this happens - kept
+    # alongside the named volume (harmless, and consistent with
+    # postgres-dev-data's own pattern) since both changes are real,
+    # independently-motivated improvements.
+    restart: on-failure:5
+    volumes:
+      - rabbitmq-dev-data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
@@ -186,3 +202,4 @@ services:
 
 volumes:
   postgres-dev-data:
+  rabbitmq-dev-data:

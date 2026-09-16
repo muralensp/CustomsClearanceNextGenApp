@@ -23,10 +23,37 @@
 # EventId, proving the real RabbitMQ publish/consume path (not just that
 # PublishAsync returned without throwing) - same reasoning as the
 # PostgreSQL check above, extended to the event bus.
-set -euo pipefail
+#
+# Day 34 finding: `docker compose up`'s own dependency-wait for rabbitmq's
+# healthcheck can fail transiently on a brand-new volume's first boot
+# (the .erlang.cookie eacces race documented in docker-compose.yml's
+# rabbitmq service) - the container's own `restart: on-failure` policy
+# self-heals it within seconds, but `up`'s exit code reflects the moment
+# it gave up waiting, not the eventual healthy state. Retrying the whole
+# `up` command (not just waiting longer) picks up the already-restarting
+# container on the next attempt, same as a manual `docker start` retry
+# was confirmed to fix this live.
+set -uo pipefail
 
 echo "== Building and starting dev environment (docker compose) =="
-docker compose up -d --build
+UP_MAX_ATTEMPTS=3
+UP_SUCCEEDED=false
+for attempt in $(seq 1 $UP_MAX_ATTEMPTS); do
+  if docker compose up -d --build; then
+    UP_SUCCEEDED=true
+    break
+  fi
+  echo "docker compose up attempt ${attempt}/${UP_MAX_ATTEMPTS} failed (likely the rabbitmq first-boot race), retrying in 5s..."
+  sleep 5
+done
+
+if [ "$UP_SUCCEEDED" != "true" ]; then
+  echo "docker compose up did not succeed after ${UP_MAX_ATTEMPTS} attempts."
+  docker compose logs
+  exit 1
+fi
+
+set -e
 
 cleanup() {
   echo "== Tearing down dev environment =="
