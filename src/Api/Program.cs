@@ -11,10 +11,12 @@
 // pub/sub), each proven against this real host rather than only in
 // isolated unit tests.
 
+using CustomsClearance.Api.ConfigAdmin;
 using CustomsClearance.Api.Diagnostics;
 using CustomsClearance.Api.Identity;
 using CustomsClearance.Api.RulesAdmin;
 using CustomsClearance.Platform.Audit;
+using CustomsClearance.Platform.Configuration;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.Logging;
 using CustomsClearance.Platform.Messaging;
@@ -116,6 +118,16 @@ if (!string.IsNullOrWhiteSpace(rulesConnectionString))
     // IPriorityResolver/IDecisionTraceRecorder + RulesEngine orchestrator)
     // sits behind the same RulesDb-presence guard as the schema itself.
     builder.Services.AddCustomsClearanceRulesEngine();
+}
+
+// Day 36: ConfigDbContext + IConfigService - central, runtime-changeable
+// feature flags / business parameters (ADR-0030). Same connection-string-
+// presence convention as every other DbContext above.
+var configConnectionString = builder.Configuration.GetConnectionString("ConfigDb");
+if (!string.IsNullOrWhiteSpace(configConnectionString))
+{
+    builder.Services.AddDbContext<ConfigDbContext>(options => options.UseNpgsql(configConnectionString));
+    builder.Services.AddCustomsClearanceConfiguration();
 }
 
 builder.Services.AddScoped<IEventHandler<DiagnosticsWidgetCreatedPayload>, DiagnosticsWidgetCreatedHandler>();
@@ -251,6 +263,44 @@ if (app.Environment.IsDevelopment())
             }
         }
     }
+
+    // Day 36: same retry-with-backoff / EnsureCreatedAsync-then-
+    // CreateTablesAsync fallback as RulesDb above (the physical database
+    // already exists by the time ConfigDb is reached).
+    if (!string.IsNullOrWhiteSpace(configConnectionString))
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var scope = app.Services.CreateScope();
+                var configDb = scope.ServiceProvider.GetRequiredService<ConfigDbContext>();
+
+                var created = await configDb.Database.EnsureCreatedAsync();
+                if (!created)
+                {
+                    var databaseCreator = (Microsoft.EntityFrameworkCore.Storage.RelationalDatabaseCreator)
+                        configDb.GetService<Microsoft.EntityFrameworkCore.Storage.IDatabaseCreator>();
+                    try
+                    {
+                        await databaseCreator.CreateTablesAsync();
+                    }
+                    catch (Npgsql.PostgresException ex) when (ex.SqlState == Npgsql.PostgresErrorCodes.DuplicateTable)
+                    {
+                        // Already created by a previous run - fine.
+                    }
+                }
+
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                app.Logger.LogWarning(ex, "ConfigDb not ready (attempt {Attempt}/{MaxAttempts}), retrying in 2s...", attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+    }
 }
 
 // Order matters: correlation ID must be established before error handling
@@ -312,6 +362,13 @@ if (!string.IsNullOrWhiteSpace(identityConnectionString))
 if (!string.IsNullOrWhiteSpace(rulesConnectionString))
 {
     app.MapRuleAdminEndpoints();
+}
+
+// Day 36: config admin API, mapped only when ConfigDbContext is registered
+// (same Minimal API map-time bindability lesson as the rules endpoints).
+if (!string.IsNullOrWhiteSpace(configConnectionString))
+{
+    app.MapConfigAdminEndpoints();
 }
 
 // Development-only diagnostic endpoints proving the platform libraries work

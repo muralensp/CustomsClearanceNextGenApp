@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Day 36 (Phase 0, Week 8) - Configuration Service. Central, database-backed
+    store for feature flags and business parameters (currency, thresholds)
+    that can change at runtime without a redeploy. See
+    adr/0030-configuration-service.md.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Persistence\CustomsClearance.Platform.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

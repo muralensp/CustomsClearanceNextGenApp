@@ -87,6 +87,7 @@ services:
       - ConnectionStrings__DiagnosticsDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__IdentityDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__RulesDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
+      - ConnectionStrings__ConfigDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - RabbitMq__HostName=rabbitmq
       - Otlp__Endpoint=http://tempo:4317
     depends_on:

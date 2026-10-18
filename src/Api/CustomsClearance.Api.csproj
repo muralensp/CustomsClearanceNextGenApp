@@ -22,6 +22,7 @@
     <ProjectReference Include="..\Platform\Messaging\CustomsClearance.Platform.Messaging.csproj" />
     <ProjectReference Include="..\Platform\Observability\CustomsClearance.Platform.Observability.csproj" />
     <ProjectReference Include="..\Platform\RulesEngine\CustomsClearance.Platform.RulesEngine.csproj" />
+    <ProjectReference Include="..\Platform\Configuration\CustomsClearance.Platform.Configuration.csproj" />
   </ItemGroup>
 
 </Project>

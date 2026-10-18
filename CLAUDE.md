@@ -261,6 +261,12 @@ instruction to begin.
 | 34 | Rules Engine: Admin API (minimal) — real RequireAdmin-gated CRUD API for rules; two real bugs fixed (enum JSON binding, malformed-request 500→400); RabbitMQ startup race finally root-caused and fixed with a self-healing restart policy + CI retry, not another one-off workaround | `adr/0028-*.md`, `src/Api/RulesAdmin/`, `Day34_Execution_Log.md` | ADR-0028 |
 | 35 | Rules Engine Review — 3 real India-specific sample rules (De Minimis gift imports, HS Code 9018 controlled goods, Permit) loaded through the real Day 34 admin API, evaluated via a new multi-fact diagnostic endpoint; first live proof of ADR-0013's mutable-Facts cross-stage chaining | `adr/0029-*.md`, `Day35_Execution_Log.md` | ADR-0029 |
 
+## Day-by-Day Deliverables Log (Phase 0, Week 8: Configuration & Notification Base — Days 36-40)
+
+| Day | Deliverable | Key artifacts | ADR |
+|---|---|---|---|
+| 36 | Configuration Service — `Platform.Configuration` (typed key/value + feature flags in Postgres, 30s cache invalidated on write), Admin-gated `/api/config/*` CRUD; a value changed live with no restart | `adr/0030-*.md`, `src/Platform/Configuration/`, `src/Api/ConfigAdmin/`, `Day36_Execution_Log.md` | ADR-0030 |
+
 ### Day 21 — Environment & Containerization
 
 **Decision**: Confirmed **Docker Compose** (not local Kubernetes) as the local/dev environment —
@@ -856,4 +862,39 @@ unpiped.
 
 **Status**: Complete. Week 7 (Days 31-35, Rules Engine Skeleton) is fully complete as a
 cross-validated set. Next unstarted item is whatever Phase 0 schedules next, pending explicit
+instruction to begin.
+
+### Day 36 — Configuration Service
+
+**Decision**: Settled four design questions with the user before building. New
+`Platform.Configuration` library inside the `Api` host (not a separate service, per ADR-0003).
+`ConfigEntry` is a PostgreSQL typed key/value row (unique `Key`, text `Value`, `ValueType`
+String/Integer/Decimal/Boolean, `Category`, `IsFeatureFlag`), created by the same
+EnsureCreated/CreateTables startup pattern as Rules/Identity and registered only when
+`ConnectionStrings:ConfigDb` is present (route mapping behind the same guard). `IConfigService`
+reads through a 30s `IMemoryCache`; admin writes call `Invalidate(key)` so a change shows
+immediately on the host. Admin-gated (`RequireAdmin`) `/api/config/*` CRUD; `PUT` returns and logs
+old/new value for Day 38's audit wiring. `Key`/`ValueType` are immutable after creation.
+
+**Verification**: live through the Gateway against real Postgres — real `CREATE TABLE` in the Api
+log plus `psql \d`; 401/403/201 auth matrix; threshold changed 5000 → 10000 via `PUT` and read
+back as 10000 immediately with the `api` container never restarted; 422/404/204 negative paths.
+24 unit tests (97.36% line / 100% branch vs the 80% gate). Full-solution build/format/test and the
+CI `smoke-test.sh` all exit 0, unpiped.
+
+**Environmental finding**: host port 5432 was held by an unrelated project's container
+(`saferte_postgres`); left running, and worked around with a temporary compose override outside
+the repo that remaps only postgres's host port. The repo's `docker-compose.yml` is unchanged.
+
+**Files added**: `src/Platform/Configuration/` (csproj, `ConfigEntry.cs`, `ConfigValueType.cs`,
+`ConfigDbContext.cs`, `ConfigValueValidator.cs`, `IConfigService.cs`, `ConfigService.cs`,
+`ConfigCacheOptions.cs`, `ServiceCollectionExtensions.cs`); `src/Api/ConfigAdmin/`
+(`ConfigAdminEndpoints.cs`, `ConfigAdminModels.cs`); `tests/Unit/Platform.Configuration.Tests/`;
+`adr/0030-configuration-service.md`; `Phase-1_Architecture_Engineering_Prep/Day36_Execution_Log.md`.
+**Files modified**: `src/Api/Program.cs`, `src/Api/CustomsClearance.Api.csproj`,
+`src/Api/Dockerfile`, `src/Api/appsettings.Development.json`, `docker-compose.yml`,
+`tests/Integration/Api.IntegrationTests/TestApiFactory.cs`, `CustomsClearance.sln`.
+
+**Status**: Complete (not yet committed). Day 37 (Notification Base) is independent of Day 36;
+Day 38 (Audit Trail End-to-End) depends on it. Next unstarted item is **Day 37**, pending explicit
 instruction to begin.

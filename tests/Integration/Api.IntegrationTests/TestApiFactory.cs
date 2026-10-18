@@ -51,6 +51,7 @@ public class TestApiFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("ConnectionStrings__DiagnosticsDb", " ");
         Environment.SetEnvironmentVariable("ConnectionStrings__IdentityDb", " ");
         Environment.SetEnvironmentVariable("ConnectionStrings__RulesDb", " ");
+        Environment.SetEnvironmentVariable("ConnectionStrings__ConfigDb", " ");
         Environment.SetEnvironmentVariable("RabbitMq__HostName", " ");
     }
 
