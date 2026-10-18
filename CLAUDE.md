@@ -269,6 +269,7 @@ instruction to begin.
 | 37 | Notification Base — `Platform.Notifications`: `NotificationRequested` event over RabbitMQ → persisted in-app notification + SMTP email (Mailpit in dev), per-channel delivery records, idempotent on redelivery | `adr/0031-*.md`, `src/Platform/Notifications/`, `src/Api/Notifications/`, `Day37_Execution_Log.md` | ADR-0031 |
 | 38 | Audit Trail End-to-End — `Platform.Audit.Persistence` (append-only PostgreSQL audit store replacing the console writer), config create/update/delete audited with old/new value + user + timestamp, Compliance/Admin `GET /api/audit` | `adr/0032-*.md`, `src/Platform/AuditPersistence/`, `src/Api/AuditTrail/`, `Day38_Execution_Log.md` | ADR-0032 |
 | 39 | Seed Data & Reference Tables — `Platform.ReferenceData`: placeholder countries (49), currencies (INR + 12), India UQC units (45) seeded idempotently from embedded JSON; every row `Source=Placeholder-Day39`, `IsVerified=false`; read-only `/api/reference/*` | `adr/0033-*.md`, `src/Platform/ReferenceData/`, `src/Api/ReferenceData/`, `Day39_Execution_Log.md` | ADR-0033 |
+| 40 | Integration Smoke Test — `build/scripts/e2e-smoke-test.sh` + own CI job/stage: one sequential 20-check pass over auth → gateway → sample service → rules engine → audit → notification, evidence file, stops at first failure; passed 20/20 and proven able to fail | `adr/0034-*.md`, `build/scripts/e2e-smoke-test.sh`, `Day40_Execution_Log.md` | ADR-0034 |
 
 ### Day 21 — Environment & Containerization
 
@@ -1031,3 +1032,42 @@ recurred once and cleared on a plain second `up`.
 **Status**: Complete (not yet committed). Next unstarted item is **Day 40 — Integration Smoke Test**
 (auth → gateway → sample service → rules engine → audit → notification; a single sequential
 verification pass), pending explicit instruction to begin.
+
+### Day 40 — Integration Smoke Test
+
+**Decision**: Closes Week 8 (Configuration & Notification Base). The user returned the first set of
+design questions for clarification; the open reporting questions were then asked again on their own.
+Decisions: **verify-only** (no glue code linking rules → audit → notification), a **new**
+`build/scripts/e2e-smoke-test.sh` with its **own CI job** (`e2e-smoke-test` in
+`.github/workflows/ci.yml`, `E2ESmokeTest` stage in `build/azure-pipelines.yml`, lockstep per ADR-0005)
+rather than extending `smoke-test.sh`, **happy path only**, a numbered PASS/FAIL log plus an **evidence
+file** (`TestResults/e2e-evidence.txt`, uploaded as a CI artifact), and **stop at the first failure**
+with a container-log dump. One `X-Correlation-Id` is sent on every request. 20 checks: environment;
+admin + broker login; Gateway liveness/proxy/dual-layer Admin JWT/correlation echo; widget
+write+read and its RabbitMQ event handled with our correlation ID; rule created via the admin API →
+evaluated to `ClearanceType=DEM` → 9 persisted trace rows; config change audited with old/new value,
+user and our correlation ID; `NotificationRequested` → notification with `Email=Delivered,InApp=Delivered`
+→ visible to the broker → email at the SMTP server. Day 48's regression pass is meant to re-run this.
+
+**Verification**: before starting, all six latest GitHub Actions runs (Days 34-39) were green. The
+script passed 20/20 (exit 0) on clean `down -v` environments, and — because a test that has only ever
+passed hasn't proven it can fail — a **fault injection** (dead SMTP-inbox URL) produced `FAIL [20]`,
+stopped with 19 passes, dumped logs and exited 1. That run exposed a gap (no outcome in the evidence
+file), fixed so a failure now writes `checks_passed`, `failed_check` and `result=FAIL`; the final pass
+and fail runs were repeated after the fix. YAML validated; `bash -n` clean. No product code changed.
+
+**Honest scope**: this proves the pieces work together through the real edge and that a correlation ID
+survives the Gateway, event bus, audit store and publish log. It does **not** prove one business action
+flows through rules → audit → notification (no such wiring exists), and the correlation ID is not
+stored on decision-trace rows or the notification record. Observability signals and Day 37-39 negative
+behaviours are not re-verified. The new CI job had not yet run on GitHub when this was written.
+
+**Files added**: `build/scripts/e2e-smoke-test.sh`; `adr/0034-phase-0-end-to-end-smoke-test.md`;
+`Phase-1_Architecture_Engineering_Prep/Day40_Execution_Log.md` (embeds the passing evidence).
+**Files modified**: `.github/workflows/ci.yml`, `build/azure-pipelines.yml`, `CLAUDE.md`.
+
+**Status**: Complete (not yet committed). Week 8 (Days 36-40) is fully complete. Next unstarted item is
+**Week 9, Day 41 — Security Hardening** (Days 41-44 are independent workstreams, a parallelization
+candidate), pending explicit instruction to begin. Known carry-forwards for Day 41: database-level audit
+immutability (ADR-0032), personal data in the notification event payload (ADR-0031), the duplicate
+`X-Correlation-Id` response header from the Gateway.

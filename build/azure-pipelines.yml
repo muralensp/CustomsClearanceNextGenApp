@@ -13,6 +13,7 @@
 # Day 13 adds the Containerize stage (docker-compose smoke test) - kept in
 # lockstep with .github/workflows/ci.yml per ADR-0005's discipline requirement.
 # Day 14 adds IntegrationTest and ContractTest stages, likewise kept in lockstep.
+# Day 40 adds the E2ESmokeTest stage (e2e-smoke-test.sh), likewise kept in lockstep.
 
 trigger:
   branches:
@@ -124,3 +125,21 @@ stages:
             inputs:
               testResultsFormat: 'JUnit'
               testResultsFiles: '**/TestResults/newman-results.xml'
+
+  - stage: E2ESmokeTest
+    dependsOn: Build
+    jobs:
+      - job: E2ESmokeTest
+        steps:
+          - bash: |
+              mkdir -p TestResults
+              build/scripts/e2e-smoke-test.sh
+            displayName: 'End-to-end smoke test (auth > gateway > rules > audit > notification)'
+          - bash: docker compose logs
+            condition: failed()
+            displayName: 'Dump container logs on failure'
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            inputs:
+              targetPath: 'TestResults/e2e-evidence.txt'
+              artifact: 'e2e-smoke-evidence'
