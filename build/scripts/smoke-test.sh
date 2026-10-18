@@ -35,6 +35,11 @@
 # was confirmed to fix this live.
 set -uo pipefail
 
+# Host ports are overridable so several copies of the stack can run side by side
+# (build/scripts/agent-env.sh); the defaults are the original fixed ports.
+GATEWAY_URL="http://localhost:${GATEWAY_PORT:-8080}"
+MAILPIT_URL="http://localhost:${MAILPIT_UI_PORT:-8025}"
+
 echo "== Building and starting dev environment (docker compose) =="
 UP_MAX_ATTEMPTS=3
 UP_SUCCEEDED=false
@@ -65,7 +70,7 @@ echo "== Waiting for Api health check =="
 MAX_ATTEMPTS=20
 HEALTHY=false
 for i in $(seq 1 $MAX_ATTEMPTS); do
-  if curl -sf http://localhost:8080/health > /tmp/health_response.json 2>/dev/null; then
+  if curl -sf ${GATEWAY_URL}/health > /tmp/health_response.json 2>/dev/null; then
     echo "Api healthy after ${i} attempt(s):"
     cat /tmp/health_response.json
     echo ""
@@ -83,7 +88,7 @@ if [ "$HEALTHY" != "true" ]; then
 fi
 
 echo "== Verifying real PostgreSQL round-trip (Platform.Persistence) =="
-CREATE_RESPONSE=$(curl -sf -X POST "http://localhost:8080/diagnostics/widgets?name=CiSmokeTestWidget")
+CREATE_RESPONSE=$(curl -sf -X POST "${GATEWAY_URL}/diagnostics/widgets?name=CiSmokeTestWidget")
 echo "Create response: ${CREATE_RESPONSE}"
 
 WIDGET_ID=$(echo "${CREATE_RESPONSE}" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
@@ -93,7 +98,7 @@ if [ -z "${WIDGET_ID}" ]; then
   exit 1
 fi
 
-GET_RESPONSE=$(curl -sf "http://localhost:8080/diagnostics/widgets/${WIDGET_ID}")
+GET_RESPONSE=$(curl -sf "${GATEWAY_URL}/diagnostics/widgets/${WIDGET_ID}")
 echo "Get response: ${GET_RESPONSE}"
 
 if ! echo "${GET_RESPONSE}" | grep -q "CiSmokeTestWidget"; then
@@ -131,13 +136,13 @@ fi
 echo "RabbitMQ round-trip verified: event published and consumed successfully."
 
 echo "== Verifying notification pipeline: event -> Postgres -> SMTP (Platform.Notifications, Day 37) =="
-NOTIFY_RESPONSE=$(curl -sf -X POST "http://localhost:8080/diagnostics/notifications/test-event?recipient=broker&emailAddress=ci-smoke@example.com")
+NOTIFY_RESPONSE=$(curl -sf -X POST "${GATEWAY_URL}/diagnostics/notifications/test-event?recipient=broker&emailAddress=ci-smoke@example.com")
 echo "Fire response: ${NOTIFY_RESPONSE}"
 
 NOTIFY_DELIVERED=false
 for i in $(seq 1 10); do
   # Mailpit's HTTP API lists messages it received over real SMTP.
-  if curl -sf http://localhost:8025/api/v1/messages | grep -q "ci-smoke@example.com"; then
+  if curl -sf ${MAILPIT_URL}/api/v1/messages | grep -q "ci-smoke@example.com"; then
     echo "Notification email reached the SMTP server after ${i} attempt(s)."
     NOTIFY_DELIVERED=true
     break
@@ -155,7 +160,7 @@ fi
 echo "Notification round-trip verified: event consumed, notification persisted, email delivered over SMTP."
 
 echo "== Verifying audit trail: config change -> append-only store -> read API (Platform.Audit.Persistence, Day 38) =="
-LOGIN_RESPONSE=$(curl -sf -X POST http://localhost:8080/auth/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"Admin-Dev-Pw-123!"}')
+LOGIN_RESPONSE=$(curl -sf -X POST ${GATEWAY_URL}/auth/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"Admin-Dev-Pw-123!"}')
 ADMIN_TOKEN=$(echo "${LOGIN_RESPONSE}" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4)
 if [ -z "${ADMIN_TOKEN}" ]; then
   echo "Could not obtain an admin token."
@@ -164,15 +169,15 @@ if [ -z "${ADMIN_TOKEN}" ]; then
 fi
 
 CONFIG_KEY="ci.audit.smoke.$(date +%s)"
-CONFIG_RESPONSE=$(curl -sf -X POST http://localhost:8080/api/config \
+CONFIG_RESPONSE=$(curl -sf -X POST ${GATEWAY_URL}/api/config \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" -H 'Content-Type: application/json' \
   -d "{\"key\":\"${CONFIG_KEY}\",\"value\":\"CiAuditOld\",\"valueType\":\"String\",\"isFeatureFlag\":false}")
 CONFIG_ID=$(echo "${CONFIG_RESPONSE}" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
-curl -sf -X PUT "http://localhost:8080/api/config/${CONFIG_KEY}" \
+curl -sf -X PUT "${GATEWAY_URL}/api/config/${CONFIG_KEY}" \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" -H 'Content-Type: application/json' \
   -d '{"value":"CiAuditNew"}' > /dev/null
 
-AUDIT_RESPONSE=$(curl -sf -H "Authorization: Bearer ${ADMIN_TOKEN}" "http://localhost:8080/api/audit?entityId=${CONFIG_ID}")
+AUDIT_RESPONSE=$(curl -sf -H "Authorization: Bearer ${ADMIN_TOKEN}" "${GATEWAY_URL}/api/audit?entityId=${CONFIG_ID}")
 echo "Audit response: ${AUDIT_RESPONSE}"
 
 if ! echo "${AUDIT_RESPONSE}" | grep -q '"previousValue":"CiAuditOld"' || ! echo "${AUDIT_RESPONSE}" | grep -q '"newValue":"CiAuditNew"'; then
@@ -187,7 +192,7 @@ echo "== Verifying seeded reference data (Platform.ReferenceData, Day 39) =="
 for LOOKUP in "countries/IN:India" "currencies/INR:Indian Rupee" "units/KGS:Kilograms"; do
   LOOKUP_PATH="${LOOKUP%%:*}"
   LOOKUP_EXPECTED="${LOOKUP#*:}"
-  LOOKUP_RESPONSE=$(curl -sf -H "Authorization: Bearer ${ADMIN_TOKEN}" "http://localhost:8080/api/reference/${LOOKUP_PATH}")
+  LOOKUP_RESPONSE=$(curl -sf -H "Authorization: Bearer ${ADMIN_TOKEN}" "${GATEWAY_URL}/api/reference/${LOOKUP_PATH}")
   echo "${LOOKUP_PATH}: ${LOOKUP_RESPONSE}"
   if ! echo "${LOOKUP_RESPONSE}" | grep -q "${LOOKUP_EXPECTED}"; then
     echo "Reference lookup ${LOOKUP_PATH} did not return '${LOOKUP_EXPECTED}'."

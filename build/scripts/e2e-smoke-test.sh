@@ -24,8 +24,8 @@
 # tests and the earlier execution logs.
 set -uo pipefail
 
-BASE_URL="${E2E_BASE_URL:-http://localhost:8080}"
-MAILPIT_URL="${E2E_MAILPIT_URL:-http://localhost:8025}"
+BASE_URL="${E2E_BASE_URL:-http://localhost:${GATEWAY_PORT:-8080}}"
+MAILPIT_URL="${E2E_MAILPIT_URL:-http://localhost:${MAILPIT_UI_PORT:-8025}}"
 EVIDENCE_FILE="${E2E_EVIDENCE_FILE:-TestResults/e2e-evidence.txt}"
 
 RUN_ID="$(date +%s)"

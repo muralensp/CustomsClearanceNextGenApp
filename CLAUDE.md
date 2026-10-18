@@ -1074,3 +1074,20 @@ run is the real confirmation. Lesson: a local pass can hide a timing race; poll,
 candidate), pending explicit instruction to begin. Known carry-forwards for Day 41: database-level audit
 immutability (ADR-0032), personal data in the notification event payload (ADR-0031), the duplicate
 `X-Correlation-Id` response header from the Gateway.
+
+### Parallel-work Foundation (between Day 40 and Day 41)
+
+**Decision**: Step 1 of the multi-agent adoption plan, structure only (ADR-0035). `src/Api/Program.cs`
+(863 lines) became ~125: each capability is now an `IApiModule` in `src/Api/Modules/` that owns its service
+registration, Development schema bootstrap and routes, discovered by assembly scan - adding one means
+adding a file, not editing `Program.cs`. `DatabaseBootstrap` holds the retry + EnsureCreated/CreateTables
+logic once. `docker-compose.yml` host ports and image tags are overridable with unchanged defaults, and
+`build/scripts/agent-env.sh <slot>` gives each worker its own compose project and port range.
+`docs/PARALLEL-WORK.md` lists the files that stay shared and who owns them.
+
+**Verification**: build/format/full tests exit 0; Day 40 E2E 20/20 on two stacks started together (default
+and `cc-slot-1`); unmodified `smoke-test.sh` exit 0; 110/110 slot ports distinct (the first check was
+vacuous and a real SMTP-port collision was found by the second). Not committed.
+
+**Status**: Complete (not yet committed). Next steps of the adoption plan (skills, Days 41-44 independence
+check, pilot) not started; Day 41 awaits explicit instruction.

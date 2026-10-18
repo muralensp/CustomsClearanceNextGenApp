@@ -56,6 +56,14 @@
 # (dev-scale, no real SMTP/webhook destination exists yet) - alert state is
 # proven via Grafana's own Alerting UI/API, not a delivered notification.
 #
+# Parallel / multi-agent use: every host port and the image tag prefix are
+# overridable, and container names and volumes are derived from the compose
+# project name (no container_name is set anywhere), so several full copies of
+# this stack can run at once on one machine. build/scripts/agent-env.sh <slot>
+# prints the COMPOSE_PROJECT_NAME + port variables for a numbered slot. With
+# none of these set, everything is exactly as before (project name from the
+# directory, the default ports below). See docs/PARALLEL-WORK.md.
+#
 # Day 31: ConnectionStrings__RulesDb (api service, below) points
 # RulesDbContext (ADR-0002/ADR-0013's Rule/RuleVersion/RuleCondition
 # schema) at this same postgres service - same real-schema-migration proof
@@ -66,9 +74,9 @@ services:
     build:
       context: .
       dockerfile: src/Gateway/Dockerfile
-    image: customsclearance-gateway:dev
+    image: ${IMAGE_PREFIX:-customsclearance}-gateway:dev
     ports:
-      - "8080:8080"
+      - "${GATEWAY_PORT:-8080}:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ReverseProxy__Clusters__api-cluster__Destinations__api-destination__Address=http://api:8080/
@@ -81,7 +89,7 @@ services:
     build:
       context: .
       dockerfile: src/Api/Dockerfile
-    image: customsclearance-api:dev
+    image: ${IMAGE_PREFIX:-customsclearance}-api:dev
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DiagnosticsDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
@@ -113,8 +121,8 @@ services:
   mailpit:
     image: axllent/mailpit:v1.21
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -122,8 +130,8 @@ services:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
     # Day 34 finding, revised: switching to a named volume (below) did NOT
     # fix the recurring /var/lib/rabbitmq/.erlang.cookie eacces crash
     # (Days 26/27/30/33) - it recurred even against this fresh named
@@ -153,7 +161,7 @@ services:
       - POSTGRES_PASSWORD=devlocalonly
       - POSTGRES_DB=customsclearance_dev
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-dev-data:/var/lib/postgresql/data
     # Day 18 fix: without this, "depends_on: - postgres" only waits for the
@@ -172,7 +180,7 @@ services:
     image: grafana/loki:2.9.8
     command: -config.file=/etc/loki/local-config.yaml
     ports:
-      - "3100:3100"
+      - "${LOKI_PORT:-3100}:3100"
 
   promtail:
     image: grafana/promtail:2.9.8
@@ -187,7 +195,7 @@ services:
   grafana:
     image: grafana/grafana:11.1.0
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3000}:3000"
     environment:
       # Dev-only convenience (no login screen) - not a production posture.
       - GF_AUTH_ANONYMOUS_ENABLED=true
@@ -208,7 +216,7 @@ services:
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
 
   tempo:
     image: grafana/tempo:2.5.0
@@ -216,8 +224,8 @@ services:
     volumes:
       - ./observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
     ports:
-      - "4317:4317"
-      - "3200:3200"
+      - "${TEMPO_OTLP_PORT:-4317}:4317"
+      - "${TEMPO_HTTP_PORT:-3200}:3200"
 
 volumes:
   postgres-dev-data:
