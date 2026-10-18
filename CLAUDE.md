@@ -267,6 +267,7 @@ instruction to begin.
 |---|---|---|---|
 | 36 | Configuration Service — `Platform.Configuration` (typed key/value + feature flags in Postgres, 30s cache invalidated on write), Admin-gated `/api/config/*` CRUD; a value changed live with no restart | `adr/0030-*.md`, `src/Platform/Configuration/`, `src/Api/ConfigAdmin/`, `Day36_Execution_Log.md` | ADR-0030 |
 | 37 | Notification Base — `Platform.Notifications`: `NotificationRequested` event over RabbitMQ → persisted in-app notification + SMTP email (Mailpit in dev), per-channel delivery records, idempotent on redelivery | `adr/0031-*.md`, `src/Platform/Notifications/`, `src/Api/Notifications/`, `Day37_Execution_Log.md` | ADR-0031 |
+| 38 | Audit Trail End-to-End — `Platform.Audit.Persistence` (append-only PostgreSQL audit store replacing the console writer), config create/update/delete audited with old/new value + user + timestamp, Compliance/Admin `GET /api/audit` | `adr/0032-*.md`, `src/Platform/AuditPersistence/`, `src/Api/AuditTrail/`, `Day38_Execution_Log.md` | ADR-0032 |
 
 ### Day 21 — Environment & Containerization
 
@@ -943,3 +944,49 @@ preferences, resolving real recipient addresses from a user profile (the address
 in the event payload — personal data under DPDPA 2023, ADR-0004), a real SMTP relay. Next
 unstarted item is **Day 38 — Audit Trail End-to-End** (depends on Day 36's config service, which
 exists), pending explicit instruction to begin.
+
+### Day 38 — Audit Trail End-to-End
+
+**Decision**: Settled four design questions with the user before building. `Platform.Audit` (Day 17)
+only had a console writer, so the real gap was a durable, queryable store. New
+`Platform.Audit.Persistence` project (keeps `Platform.Audit` storage-agnostic and EF-free):
+`AuditDbContext` (plain `DbContext`, **rejects update/delete in `SaveChanges`** — application-level
+append-only), `AuditEventRecord` (FieldChanges as a JSON text column), `EfAuditWriter` (singleton
+over `IDbContextFactory`, so on its own connection), `AuditQueryService`, and
+`AddCustomsClearanceAuditPersistence(o => o.UseNpgsql(...))` which *replaces* the
+`ConsoleAuditWriter` registration (provider supplied by the caller, ADR-0001). Active when
+`ConnectionStrings:AuditDb` is set; otherwise audit stays on the console (integration tests stay
+infrastructure-free). Config create/update/delete (Day 36) now write `TechnicalAudit`/`Internal`
+events with field-level old/new values and `PerformedBy` = JWT `sub`; unchanged or rejected PUTs are
+not audited. `GET /api/audit` (+ `/{id}`) is `RequireComplianceOfficerOrAdmin`, filtered, paged,
+newest first; read-only by design.
+
+**Accepted, documented gaps**: (1) DB-level immutability — an `UPDATE` on `AuditEvents` succeeds at
+the database (shown live); deferred to Day 41 Security Hardening. (2) Change and audit are
+sequential, not atomic — a crash between the two commits could lose the audit row; an audit failure
+returns 500 after the change is committed. (3) No retention/partitioning (ADR-0004: 5 years,
+monthly) or tamper-evidence yet. Other mutations (e.g. Day 34 rules admin) are not audited yet.
+
+**Verification**: live through the Gateway on the **unmodified** `docker-compose.yml` (port 5432 was
+freed) — admin created/changed/deleted a config value; a compliance officer read back 3 events with
+old/new values, timestamps and the admin's user id (matches `Users.Id`); no-op/invalid PUTs left no
+rows; access matrix 200/200/403/403/401; response `X-Correlation-Id` equals the stored audit
+`CorrelationId`. 13 unit tests (100% line/branch vs the 95% gate). Full-solution build/format/test
+and the extended `smoke-test.sh` (config change → `/api/audit` old/new check, fresh volumes) all exit
+0, unpiped.
+
+**Side-finding (not changed)**: the Gateway response carries `X-Correlation-Id` twice with the same
+value.
+
+**Files added**: `src/Platform/AuditPersistence/` (csproj, `AuditEventRecord.cs`, `AuditDbContext.cs`,
+`EfAuditWriter.cs`, `AuditQueryService.cs`, `ServiceCollectionExtensions.cs`);
+`src/Api/AuditTrail/AuditEndpoints.cs`; `src/Api/ConfigAdmin/ConfigAudit.cs`;
+`tests/Unit/Platform.Audit.Persistence.Tests/`; `adr/0032-audit-trail-end-to-end.md`;
+`Phase-1_Architecture_Engineering_Prep/Day38_Execution_Log.md`. **Files modified**:
+`src/Api/ConfigAdmin/ConfigAdminEndpoints.cs`, `src/Api/Program.cs`,
+`src/Api/CustomsClearance.Api.csproj`, `src/Api/Dockerfile`, `src/Api/appsettings.Development.json`,
+`docker-compose.yml`, `build/scripts/smoke-test.sh`,
+`tests/Integration/Api.IntegrationTests/TestApiFactory.cs`, `CustomsClearance.sln`.
+
+**Status**: Complete (not yet committed). Next unstarted item is **Day 39 — Seed Data & Reference
+Tables** (parallelizable per the plan), pending explicit instruction to begin.

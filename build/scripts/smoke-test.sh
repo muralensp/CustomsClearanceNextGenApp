@@ -153,3 +153,32 @@ if [ "${NOTIFY_DELIVERED}" != "true" ]; then
 fi
 
 echo "Notification round-trip verified: event consumed, notification persisted, email delivered over SMTP."
+
+echo "== Verifying audit trail: config change -> append-only store -> read API (Platform.Audit.Persistence, Day 38) =="
+LOGIN_RESPONSE=$(curl -sf -X POST http://localhost:8080/auth/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"Admin-Dev-Pw-123!"}')
+ADMIN_TOKEN=$(echo "${LOGIN_RESPONSE}" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4)
+if [ -z "${ADMIN_TOKEN}" ]; then
+  echo "Could not obtain an admin token."
+  docker compose logs api
+  exit 1
+fi
+
+CONFIG_KEY="ci.audit.smoke.$(date +%s)"
+CONFIG_RESPONSE=$(curl -sf -X POST http://localhost:8080/api/config \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" -H 'Content-Type: application/json' \
+  -d "{\"key\":\"${CONFIG_KEY}\",\"value\":\"CiAuditOld\",\"valueType\":\"String\",\"isFeatureFlag\":false}")
+CONFIG_ID=$(echo "${CONFIG_RESPONSE}" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+curl -sf -X PUT "http://localhost:8080/api/config/${CONFIG_KEY}" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" -H 'Content-Type: application/json' \
+  -d '{"value":"CiAuditNew"}' > /dev/null
+
+AUDIT_RESPONSE=$(curl -sf -H "Authorization: Bearer ${ADMIN_TOKEN}" "http://localhost:8080/api/audit?entityId=${CONFIG_ID}")
+echo "Audit response: ${AUDIT_RESPONSE}"
+
+if ! echo "${AUDIT_RESPONSE}" | grep -q '"previousValue":"CiAuditOld"' || ! echo "${AUDIT_RESPONSE}" | grep -q '"newValue":"CiAuditNew"'; then
+  echo "Audit trail did not record the config change's old and new values."
+  docker compose logs api
+  exit 1
+fi
+
+echo "Audit round-trip verified: config change recorded with old/new value, readable via /api/audit."

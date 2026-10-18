@@ -11,12 +11,14 @@
 // pub/sub), each proven against this real host rather than only in
 // isolated unit tests.
 
+using CustomsClearance.Api.AuditTrail;
 using CustomsClearance.Api.ConfigAdmin;
 using CustomsClearance.Api.Diagnostics;
 using CustomsClearance.Api.Identity;
 using CustomsClearance.Api.Notifications;
 using CustomsClearance.Api.RulesAdmin;
 using CustomsClearance.Platform.Audit;
+using CustomsClearance.Platform.Audit.Persistence;
 using CustomsClearance.Platform.Configuration;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.Logging;
@@ -144,6 +146,16 @@ if (!string.IsNullOrWhiteSpace(notificationsConnectionString))
 }
 
 builder.Services.AddScoped<IEventHandler<DiagnosticsWidgetCreatedPayload>, DiagnosticsWidgetCreatedHandler>();
+
+// Day 38: durable, append-only audit store (ADR-0032). When ConnectionStrings:
+// AuditDb is present, EfAuditWriter replaces the ConsoleAuditWriter that
+// AddCustomsClearanceAudit() registered above; absent (integration tests),
+// audit events keep going to the console, so tests stay infrastructure-free.
+var auditConnectionString = builder.Configuration.GetConnectionString("AuditDb");
+if (!string.IsNullOrWhiteSpace(auditConnectionString))
+{
+    builder.Services.AddCustomsClearanceAuditPersistence(options => options.UseNpgsql(auditConnectionString));
+}
 
 var app = builder.Build();
 
@@ -351,6 +363,43 @@ if (app.Environment.IsDevelopment())
             }
         }
     }
+
+    // Day 38: same retry-with-backoff / EnsureCreatedAsync-then-
+    // CreateTablesAsync fallback as NotificationsDb above.
+    if (!string.IsNullOrWhiteSpace(auditConnectionString))
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                var auditDbFactory = app.Services.GetRequiredService<IDbContextFactory<AuditDbContext>>();
+                await using var auditDb = await auditDbFactory.CreateDbContextAsync();
+
+                var created = await auditDb.Database.EnsureCreatedAsync();
+                if (!created)
+                {
+                    var databaseCreator = (Microsoft.EntityFrameworkCore.Storage.RelationalDatabaseCreator)
+                        auditDb.GetService<Microsoft.EntityFrameworkCore.Storage.IDatabaseCreator>();
+                    try
+                    {
+                        await databaseCreator.CreateTablesAsync();
+                    }
+                    catch (Npgsql.PostgresException ex) when (ex.SqlState == Npgsql.PostgresErrorCodes.DuplicateTable)
+                    {
+                        // Already created by a previous run - fine.
+                    }
+                }
+
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                app.Logger.LogWarning(ex, "AuditDb not ready (attempt {Attempt}/{MaxAttempts}), retrying in 2s...", attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+    }
 }
 
 // Order matters: correlation ID must be established before error handling
@@ -426,6 +475,13 @@ if (!string.IsNullOrWhiteSpace(configConnectionString))
 if (!string.IsNullOrWhiteSpace(notificationsConnectionString))
 {
     app.MapNotificationEndpoints();
+}
+
+// Day 38: audit trail read API (Compliance Officer or Admin), mapped only when
+// the durable store (and so AuditQueryService) is registered.
+if (!string.IsNullOrWhiteSpace(auditConnectionString))
+{
+    app.MapAuditEndpoints();
 }
 
 // Development-only diagnostic endpoints proving the platform libraries work

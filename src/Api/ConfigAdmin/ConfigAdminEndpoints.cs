@@ -1,3 +1,4 @@
+using CustomsClearance.Platform.Audit;
 using CustomsClearance.Platform.Configuration;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.Security;
@@ -34,8 +35,10 @@ public static class ConfigAdminEndpoints
 
     private static async Task<IResult> CreateAsync(
         CreateConfigRequest request,
+        HttpContext http,
         ConfigDbContext dbContext,
         IConfigService configService,
+        IAuditWriter auditWriter,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Key) || request.Key.Length > 200)
@@ -72,6 +75,14 @@ public static class ConfigAdminEndpoints
         // Clears any negative ("key absent") cache entry from an earlier read.
         configService.Invalidate(entry.Key);
 
+        await ConfigAudit.WriteAsync(auditWriter, http, "ConfigCreated", entry.Id,
+        [
+            new FieldChange(nameof(ConfigEntry.Key), null, entry.Key),
+            new FieldChange(nameof(ConfigEntry.Value), null, entry.Value),
+            new FieldChange(nameof(ConfigEntry.ValueType), null, entry.ValueType.ToString()),
+            new FieldChange(nameof(ConfigEntry.IsFeatureFlag), null, entry.IsFeatureFlag.ToString()),
+        ], cancellationToken);
+
         return Results.Created($"/api/config/{entry.Key}", ToResponse(entry));
     }
 
@@ -100,8 +111,10 @@ public static class ConfigAdminEndpoints
     private static async Task<IResult> UpdateAsync(
         string key,
         UpdateConfigRequest request,
+        HttpContext http,
         ConfigDbContext dbContext,
         IConfigService configService,
+        IAuditWriter auditWriter,
         ILogger<ConfigEntry> logger,
         CancellationToken cancellationToken)
     {
@@ -114,6 +127,7 @@ public static class ConfigAdminEndpoints
         ValidateValue(entry.ValueType, request.Value, nameof(request.Value));
 
         var oldValue = entry.Value;
+        var oldDescription = entry.Description;
         entry.Value = request.Value;
         if (request.Description is not null)
         {
@@ -125,13 +139,33 @@ public static class ConfigAdminEndpoints
 
         logger.LogInformation("Config '{ConfigKey}' changed from '{OldValue}' to '{NewValue}'", key, oldValue, entry.Value);
 
+        // Only genuine changes are audited; a PUT that changes nothing is not
+        // an audit-worthy event.
+        var changes = new List<FieldChange>();
+        if (oldValue != entry.Value)
+        {
+            changes.Add(new FieldChange(nameof(ConfigEntry.Value), oldValue, entry.Value));
+        }
+
+        if (oldDescription != entry.Description)
+        {
+            changes.Add(new FieldChange(nameof(ConfigEntry.Description), oldDescription, entry.Description));
+        }
+
+        if (changes.Count > 0)
+        {
+            await ConfigAudit.WriteAsync(auditWriter, http, "ConfigUpdated", entry.Id, changes, cancellationToken);
+        }
+
         return Results.Ok(new ConfigChangeResponse(key, oldValue, entry.Value, ToResponse(entry)));
     }
 
     private static async Task<IResult> DeleteAsync(
         string key,
+        HttpContext http,
         ConfigDbContext dbContext,
         IConfigService configService,
+        IAuditWriter auditWriter,
         ILogger<ConfigEntry> logger,
         CancellationToken cancellationToken)
     {
@@ -146,6 +180,12 @@ public static class ConfigAdminEndpoints
         configService.Invalidate(key);
 
         logger.LogInformation("Config '{ConfigKey}' deleted (last value '{OldValue}')", key, entry.Value);
+
+        await ConfigAudit.WriteAsync(auditWriter, http, "ConfigDeleted", entry.Id,
+        [
+            new FieldChange(nameof(ConfigEntry.Key), entry.Key, null),
+            new FieldChange(nameof(ConfigEntry.Value), entry.Value, null),
+        ], cancellationToken);
 
         return Results.NoContent();
     }

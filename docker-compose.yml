@@ -89,6 +89,7 @@ services:
       - ConnectionStrings__RulesDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__ConfigDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__NotificationsDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
+      - ConnectionStrings__AuditDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - Email__Host=mailpit
       - Email__Port=1025
       - Email__From=noreply@customsclearance.local

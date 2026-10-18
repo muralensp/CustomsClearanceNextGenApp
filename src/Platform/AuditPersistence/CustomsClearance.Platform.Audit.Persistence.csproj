@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Day 38 (Phase 0, Week 8) - Audit Trail End-to-End. The real, durable
+    IAuditWriter sink adr/0004 Section 9 / ADR-0011 anticipated, kept in its
+    own project so Platform.Audit (the shared AuditEvent model + port) stays
+    storage-agnostic and free of EF Core. Provider-agnostic: the caller
+    supplies the UseNpgsql(...) options action (ADR-0001's SQL Server
+    migration path). See adr/0032-audit-trail-end-to-end.md.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Audit\CustomsClearance.Platform.Audit.csproj" />
+  </ItemGroup>
+
+</Project>
