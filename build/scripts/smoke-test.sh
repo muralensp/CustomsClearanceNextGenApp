@@ -129,3 +129,27 @@ if [ "${EVENT_HANDLED}" != "true" ]; then
 fi
 
 echo "RabbitMQ round-trip verified: event published and consumed successfully."
+
+echo "== Verifying notification pipeline: event -> Postgres -> SMTP (Platform.Notifications, Day 37) =="
+NOTIFY_RESPONSE=$(curl -sf -X POST "http://localhost:8080/diagnostics/notifications/test-event?recipient=broker&emailAddress=ci-smoke@example.com")
+echo "Fire response: ${NOTIFY_RESPONSE}"
+
+NOTIFY_DELIVERED=false
+for i in $(seq 1 10); do
+  # Mailpit's HTTP API lists messages it received over real SMTP.
+  if curl -sf http://localhost:8025/api/v1/messages | grep -q "ci-smoke@example.com"; then
+    echo "Notification email reached the SMTP server after ${i} attempt(s)."
+    NOTIFY_DELIVERED=true
+    break
+  fi
+  echo "Attempt ${i}/10: email not yet received, retrying in 1s..."
+  sleep 1
+done
+
+if [ "${NOTIFY_DELIVERED}" != "true" ]; then
+  echo "NotificationRequested event never produced an email via RabbitMQ -> handler -> SMTP."
+  docker compose logs api mailpit
+  exit 1
+fi
+
+echo "Notification round-trip verified: event consumed, notification persisted, email delivered over SMTP."

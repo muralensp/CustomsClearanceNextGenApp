@@ -21,6 +21,7 @@ COPY src/Platform/Messaging/CustomsClearance.Platform.Messaging.csproj src/Platf
 COPY src/Platform/Observability/CustomsClearance.Platform.Observability.csproj src/Platform/Observability/
 COPY src/Platform/RulesEngine/CustomsClearance.Platform.RulesEngine.csproj src/Platform/RulesEngine/
 COPY src/Platform/Configuration/CustomsClearance.Platform.Configuration.csproj src/Platform/Configuration/
+COPY src/Platform/Notifications/CustomsClearance.Platform.Notifications.csproj src/Platform/Notifications/
 
 RUN dotnet restore src/Api/CustomsClearance.Api.csproj
 
@@ -35,6 +36,7 @@ COPY src/Platform/Messaging/ src/Platform/Messaging/
 COPY src/Platform/Observability/ src/Platform/Observability/
 COPY src/Platform/RulesEngine/ src/Platform/RulesEngine/
 COPY src/Platform/Configuration/ src/Platform/Configuration/
+COPY src/Platform/Notifications/ src/Platform/Notifications/
 
 RUN dotnet publish src/Api/CustomsClearance.Api.csproj -c Release -o /app --no-restore
 

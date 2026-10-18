@@ -266,6 +266,7 @@ instruction to begin.
 | Day | Deliverable | Key artifacts | ADR |
 |---|---|---|---|
 | 36 | Configuration Service — `Platform.Configuration` (typed key/value + feature flags in Postgres, 30s cache invalidated on write), Admin-gated `/api/config/*` CRUD; a value changed live with no restart | `adr/0030-*.md`, `src/Platform/Configuration/`, `src/Api/ConfigAdmin/`, `Day36_Execution_Log.md` | ADR-0030 |
+| 37 | Notification Base — `Platform.Notifications`: `NotificationRequested` event over RabbitMQ → persisted in-app notification + SMTP email (Mailpit in dev), per-channel delivery records, idempotent on redelivery | `adr/0031-*.md`, `src/Platform/Notifications/`, `src/Api/Notifications/`, `Day37_Execution_Log.md` | ADR-0031 |
 
 ### Day 21 — Environment & Containerization
 
@@ -898,3 +899,47 @@ the repo that remaps only postgres's host port. The repo's `docker-compose.yml` 
 **Status**: Complete (not yet committed). Day 37 (Notification Base) is independent of Day 36;
 Day 38 (Audit Trail End-to-End) depends on it. Next unstarted item is **Day 37**, pending explicit
 instruction to begin.
+
+### Day 37 — Notification Base
+
+**Decision**: Settled four design questions with the user before building. New
+`Platform.Notifications` library inside the `Api` host (ADR-0003). A `NotificationRequested` domain
+event (published over the Day 24 RabbitMQ bus, registered in `EventTypeRegistry`) is handled by
+`NotificationRequestedHandler` → `NotificationDispatcher`, which persists one `Notification` (the
+in-app record; `ReadAt` for read state) and runs each applicable `INotificationChannel`
+(`InApp`, `Email`), recording one `NotificationDelivery` row per channel
+(Delivered/Failed/Skipped). A failing channel never loses the in-app record or blocks other
+channels. Email goes through `IEmailSender`: real SMTP (`SmtpClient`) when `Email:Host` is set —
+a new `mailpit` container in `docker-compose.yml` is the dev SMTP sink (UI/API on 8025) — else
+`DisabledEmailSender` and the channel records Skipped. `Notification.SourceEventId` (unique) makes
+RabbitMQ redelivery idempotent. Read API: `GET /api/notifications/mine`, `POST
+/api/notifications/{id}/read` (owner only; others get 404), Admin-only `GET /api/notifications`; no
+create endpoint by design (events only). Dev-only `POST /diagnostics/notifications/test-event`
+fires the sample event. Everything sits behind `ConnectionStrings:NotificationsDb` presence.
+
+**Verification**: live through the Gateway against real Postgres/RabbitMQ/Mailpit — 3 real events
+→ 3 notifications with `SourceEventId` == published `eventId`, exactly the 2 expected emails in
+Mailpit; auth/ownership matrix (401/403/404/200); email-failure isolation proven by stopping
+Mailpit (`Email=Failed`, `InApp=Delivered`). 19 unit tests (99.34% line / 100% branch vs the 80%
+gate). Full-solution build/format/test exit 0; `smoke-test.sh` extended with an event →
+notification → SMTP check and run from a fresh-volume cycle, exit 0 — all unpiped.
+
+**Environmental notes**: host port 5432 still held by an unrelated project's `saferte_postgres`
+(temporary compose override outside the repo, as on Day 36); the known RabbitMQ first-boot race
+recurred once and self-healed on a plain second `up` (ADR-0028 policy).
+
+**Files added**: `src/Platform/Notifications/` (csproj, `Notification.cs`,
+`NotificationsDbContext.cs`, `Channels.cs`, `SmtpEmailSender.cs`, `NotificationDispatcher.cs`,
+`NotificationRequestedHandler.cs`, `ServiceCollectionExtensions.cs`);
+`src/Api/Notifications/NotificationEndpoints.cs`; `tests/Unit/Platform.Notifications.Tests/`;
+`adr/0031-notification-base.md`; `Phase-1_Architecture_Engineering_Prep/Day37_Execution_Log.md`.
+**Files modified**: `src/Api/Program.cs`, `src/Api/CustomsClearance.Api.csproj`,
+`src/Api/Dockerfile`, `src/Api/appsettings.Development.json`, `docker-compose.yml`,
+`build/scripts/smoke-test.sh`, `tests/Integration/Api.IntegrationTests/TestApiFactory.cs`,
+`CustomsClearance.sln`.
+
+**Status**: Complete (not yet committed). Deferred: retrying Failed deliveries, templates, user
+preferences, resolving real recipient addresses from a user profile (the address currently travels
+in the event payload — personal data under DPDPA 2023, ADR-0004), a real SMTP relay. Next
+unstarted item is **Day 38 — Audit Trail End-to-End** (depends on Day 36's config service, which
+exists), pending explicit instruction to begin.

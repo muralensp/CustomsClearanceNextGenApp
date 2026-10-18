@@ -14,12 +14,14 @@
 using CustomsClearance.Api.ConfigAdmin;
 using CustomsClearance.Api.Diagnostics;
 using CustomsClearance.Api.Identity;
+using CustomsClearance.Api.Notifications;
 using CustomsClearance.Api.RulesAdmin;
 using CustomsClearance.Platform.Audit;
 using CustomsClearance.Platform.Configuration;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.Logging;
 using CustomsClearance.Platform.Messaging;
+using CustomsClearance.Platform.Notifications;
 using CustomsClearance.Platform.Observability;
 using CustomsClearance.Platform.Persistence;
 using CustomsClearance.Platform.RulesEngine;
@@ -72,6 +74,7 @@ if (!string.IsNullOrWhiteSpace(rabbitMqHostName))
     builder.Services.AddCustomsClearanceRabbitMqMessaging(builder.Configuration, registry =>
     {
         registry.Register<DiagnosticsWidgetCreatedPayload>("DiagnosticsWidgetCreated");
+        registry.Register<NotificationRequestedPayload>(NotificationRequestedHandler.EventType);
     });
 }
 else
@@ -128,6 +131,16 @@ if (!string.IsNullOrWhiteSpace(configConnectionString))
 {
     builder.Services.AddDbContext<ConfigDbContext>(options => options.UseNpgsql(configConnectionString));
     builder.Services.AddCustomsClearanceConfiguration();
+}
+
+// Day 37: notification pipeline (NotificationRequested event -> persisted
+// in-app notification + optional SMTP email), ADR-0031. Same connection-
+// string-presence convention as every other DbContext above.
+var notificationsConnectionString = builder.Configuration.GetConnectionString("NotificationsDb");
+if (!string.IsNullOrWhiteSpace(notificationsConnectionString))
+{
+    builder.Services.AddDbContext<NotificationsDbContext>(options => options.UseNpgsql(notificationsConnectionString));
+    builder.Services.AddCustomsClearanceNotifications(builder.Configuration);
 }
 
 builder.Services.AddScoped<IEventHandler<DiagnosticsWidgetCreatedPayload>, DiagnosticsWidgetCreatedHandler>();
@@ -301,6 +314,43 @@ if (app.Environment.IsDevelopment())
             }
         }
     }
+
+    // Day 37: same retry-with-backoff / EnsureCreatedAsync-then-
+    // CreateTablesAsync fallback as ConfigDb above.
+    if (!string.IsNullOrWhiteSpace(notificationsConnectionString))
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var scope = app.Services.CreateScope();
+                var notificationsDb = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
+
+                var created = await notificationsDb.Database.EnsureCreatedAsync();
+                if (!created)
+                {
+                    var databaseCreator = (Microsoft.EntityFrameworkCore.Storage.RelationalDatabaseCreator)
+                        notificationsDb.GetService<Microsoft.EntityFrameworkCore.Storage.IDatabaseCreator>();
+                    try
+                    {
+                        await databaseCreator.CreateTablesAsync();
+                    }
+                    catch (Npgsql.PostgresException ex) when (ex.SqlState == Npgsql.PostgresErrorCodes.DuplicateTable)
+                    {
+                        // Already created by a previous run - fine.
+                    }
+                }
+
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                app.Logger.LogWarning(ex, "NotificationsDb not ready (attempt {Attempt}/{MaxAttempts}), retrying in 2s...", attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+    }
 }
 
 // Order matters: correlation ID must be established before error handling
@@ -371,6 +421,13 @@ if (!string.IsNullOrWhiteSpace(configConnectionString))
     app.MapConfigAdminEndpoints();
 }
 
+// Day 37: notification read API, mapped only when NotificationsDbContext is
+// registered (same map-time bindability guard as the other DB-backed APIs).
+if (!string.IsNullOrWhiteSpace(notificationsConnectionString))
+{
+    app.MapNotificationEndpoints();
+}
+
 // Development-only diagnostic endpoints proving the platform libraries work
 // end-to-end against the real host (Days 16-18) - not real business
 // endpoints. Remove/replace once real context endpoints exercise these
@@ -438,6 +495,33 @@ if (app.Environment.IsDevelopment())
             var widget = await repository.GetByIdAsync(id);
             return widget is null ? Results.NotFound() : Results.Ok(widget);
         }).WithName("DiagnosticsGetWidget");
+    }
+
+    // Day 37: dev-only trigger for the deliverable "sample notification
+    // fires on a test event" - publishes a real NotificationRequested domain
+    // event over the configured bus (RabbitMQ in compose); the handler,
+    // not this endpoint, creates the notification and sends the email.
+    if (!string.IsNullOrWhiteSpace(notificationsConnectionString))
+    {
+        app.MapPost("/diagnostics/notifications/test-event", async (
+            string recipient,
+            string? emailAddress,
+            IEventPublisher eventPublisher) =>
+        {
+            var envelope = DomainEventEnvelope<NotificationRequestedPayload>.Create(
+                eventType: NotificationRequestedHandler.EventType,
+                eventVersion: "1.0",
+                source: "DiagnosticsEndpoint",
+                payload: new NotificationRequestedPayload(
+                    recipient,
+                    "Test notification",
+                    "This is a sample notification fired by a test event.",
+                    "Diagnostics",
+                    emailAddress));
+            await eventPublisher.PublishAsync(envelope);
+
+            return Results.Ok(new { eventId = envelope.EventId, recipient, emailAddress });
+        }).WithName("DiagnosticsFireNotificationEvent");
     }
 
     // Day 31: proves RulesDbContext's real schema (Rule -> RuleVersion ->

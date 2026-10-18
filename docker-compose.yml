@@ -88,6 +88,10 @@ services:
       - ConnectionStrings__IdentityDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__RulesDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__ConfigDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
+      - ConnectionStrings__NotificationsDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
+      - Email__Host=mailpit
+      - Email__Port=1025
+      - Email__From=noreply@customsclearance.local
       - RabbitMq__HostName=rabbitmq
       - Otlp__Endpoint=http://tempo:4317
     depends_on:
@@ -97,6 +101,18 @@ services:
         condition: service_healthy
       tempo:
         condition: service_started
+      mailpit:
+        condition: service_started
+
+  # Day 37: local SMTP sink for the notification email channel. Receives real
+  # SMTP traffic from the api service and shows it in a web UI / HTTP API
+  # (8025) - no mail ever leaves the machine. Dev only; a real SMTP relay is
+  # a Staging/Production decision deferred with the rest of hosting (ADR-0008).
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "1025:1025"
+      - "8025:8025"
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine

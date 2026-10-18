@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Day 37 (Phase 0, Week 8) - Notification Base. Event-driven notification
+    skeleton: a NotificationRequested domain event (Platform.Messaging) is
+    turned into a persisted in-app Notification plus, optionally, an email
+    delivery over SMTP. See adr/0031-notification-base.md.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Persistence\CustomsClearance.Platform.Persistence.csproj" />
+    <ProjectReference Include="..\Messaging\CustomsClearance.Platform.Messaging.csproj" />
+  </ItemGroup>
+
+</Project>
