@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Day 39 (Phase 0, Week 8) - Seed Data & Reference Tables. Lookup tables
+    (countries, currencies, units of measure) seeded from embedded JSON
+    datasets. PLACEHOLDER data only: every row is tagged
+    Source = Placeholder-Day39 / IsVerified = false, ahead of the Phase 1
+    India tariff/reference data sourcing workstream. See
+    adr/0033-seed-data-and-reference-tables.md.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Data\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Persistence\CustomsClearance.Platform.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,19 @@
+{
+  "source": "Placeholder-Day39",
+  "isVerified": false,
+  "items": [
+    { "code": "INR", "numericCode": "356", "name": "Indian Rupee", "minorUnits": 2 },
+    { "code": "USD", "numericCode": "840", "name": "US Dollar", "minorUnits": 2 },
+    { "code": "EUR", "numericCode": "978", "name": "Euro", "minorUnits": 2 },
+    { "code": "GBP", "numericCode": "826", "name": "Pound Sterling", "minorUnits": 2 },
+    { "code": "JPY", "numericCode": "392", "name": "Japanese Yen", "minorUnits": 0 },
+    { "code": "AED", "numericCode": "784", "name": "UAE Dirham", "minorUnits": 2 },
+    { "code": "SGD", "numericCode": "702", "name": "Singapore Dollar", "minorUnits": 2 },
+    { "code": "CNY", "numericCode": "156", "name": "Chinese Yuan Renminbi", "minorUnits": 2 },
+    { "code": "AUD", "numericCode": "036", "name": "Australian Dollar", "minorUnits": 2 },
+    { "code": "CAD", "numericCode": "124", "name": "Canadian Dollar", "minorUnits": 2 },
+    { "code": "CHF", "numericCode": "756", "name": "Swiss Franc", "minorUnits": 2 },
+    { "code": "HKD", "numericCode": "344", "name": "Hong Kong Dollar", "minorUnits": 2 },
+    { "code": "SAR", "numericCode": "682", "name": "Saudi Riyal", "minorUnits": 2 }
+  ]
+}

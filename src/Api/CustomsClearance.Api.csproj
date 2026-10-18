@@ -25,6 +25,7 @@
     <ProjectReference Include="..\Platform\Configuration\CustomsClearance.Platform.Configuration.csproj" />
     <ProjectReference Include="..\Platform\Notifications\CustomsClearance.Platform.Notifications.csproj" />
     <ProjectReference Include="..\Platform\AuditPersistence\CustomsClearance.Platform.Audit.Persistence.csproj" />
+    <ProjectReference Include="..\Platform\ReferenceData\CustomsClearance.Platform.ReferenceData.csproj" />
   </ItemGroup>
 
 </Project>

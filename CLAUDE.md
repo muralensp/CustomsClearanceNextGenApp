@@ -268,6 +268,7 @@ instruction to begin.
 | 36 | Configuration Service — `Platform.Configuration` (typed key/value + feature flags in Postgres, 30s cache invalidated on write), Admin-gated `/api/config/*` CRUD; a value changed live with no restart | `adr/0030-*.md`, `src/Platform/Configuration/`, `src/Api/ConfigAdmin/`, `Day36_Execution_Log.md` | ADR-0030 |
 | 37 | Notification Base — `Platform.Notifications`: `NotificationRequested` event over RabbitMQ → persisted in-app notification + SMTP email (Mailpit in dev), per-channel delivery records, idempotent on redelivery | `adr/0031-*.md`, `src/Platform/Notifications/`, `src/Api/Notifications/`, `Day37_Execution_Log.md` | ADR-0031 |
 | 38 | Audit Trail End-to-End — `Platform.Audit.Persistence` (append-only PostgreSQL audit store replacing the console writer), config create/update/delete audited with old/new value + user + timestamp, Compliance/Admin `GET /api/audit` | `adr/0032-*.md`, `src/Platform/AuditPersistence/`, `src/Api/AuditTrail/`, `Day38_Execution_Log.md` | ADR-0032 |
+| 39 | Seed Data & Reference Tables — `Platform.ReferenceData`: placeholder countries (49), currencies (INR + 12), India UQC units (45) seeded idempotently from embedded JSON; every row `Source=Placeholder-Day39`, `IsVerified=false`; read-only `/api/reference/*` | `adr/0033-*.md`, `src/Platform/ReferenceData/`, `src/Api/ReferenceData/`, `Day39_Execution_Log.md` | ADR-0033 |
 
 ### Day 21 — Environment & Containerization
 
@@ -990,3 +991,43 @@ value.
 
 **Status**: Complete (not yet committed). Next unstarted item is **Day 39 — Seed Data & Reference
 Tables** (parallelizable per the plan), pending explicit instruction to begin.
+
+### Day 39 — Seed Data & Reference Tables
+
+**Decision**: Settled four design questions with the user before building. New
+`Platform.ReferenceData` library inside the `Api` host (`Country` keyed by ISO alpha-2 + unique
+alpha-3, `Currency` by ISO 4217 + numeric code + minor units, `UnitOfMeasure` by India UQC), all
+on a `ReferenceEntity` base with `Code`, `Name`, `IsActive`, **`Source` and `IsVerified`**. Stub-size
+datasets only (49 countries, 13 currencies, 45 units) in embedded `Data/*.json`;
+`ReferenceDataSeeder` is **insert-missing-by-code**, so every startup is safe and edited/deactivated
+rows are never overwritten. Read-only `GET /api/reference/{countries|currencies|units}` (+ `/{code}`,
+case-insensitive, `?includeInactive=true`) for any authenticated user; no write API until Phase 1
+master-data work. Registration, table creation + seeding, and routes sit behind
+`ConnectionStrings:ReferenceDataDb`.
+
+**Data accuracy caveat (important)**: the datasets were written from recall of ISO 3166-1, ISO 4217
+and the ICEGATE UQC list and were **not checked against an official source**. Tests prove structure
+(formats, uniqueness, INR/JPY decimals, provenance markers), not that each name/code is correct. Every
+row is therefore `Source=Placeholder-Day39`, `IsVerified=false`, visible in every API response.
+Verifying against official masters (especially UQC) is a Phase 1 task, alongside ITC-HS sourcing.
+
+**Verification**: live through the Gateway on the unmodified `docker-compose.yml` — Api log
+`49 countries, 13 currencies, 45 units inserted`; `psql` shows 49/13/45 rows with unique indexes;
+401/200/404/405 API behaviour; a row deactivated and renamed directly in Postgres survived an Api
+restart (`0/0/0 inserted`). 11 unit tests (100% line vs the 80% gate), including tests over the data
+files. Full-solution build/format/test and the extended `smoke-test.sh` (reads `countries/IN`,
+`currencies/INR`, `units/KGS`; fresh volumes) all exit 0, unpiped. The known RabbitMQ first-boot race
+recurred once and cleared on a plain second `up`.
+
+**Files added**: `src/Platform/ReferenceData/` (csproj, `ReferenceEntities.cs`,
+`ReferenceDataDbContext.cs`, `ReferenceDataSeeder.cs`, `Data/{countries,currencies,units}.json`);
+`src/Api/ReferenceData/ReferenceDataEndpoints.cs`; `tests/Unit/Platform.ReferenceData.Tests/`;
+`adr/0033-seed-data-and-reference-tables.md`;
+`Phase-1_Architecture_Engineering_Prep/Day39_Execution_Log.md`. **Files modified**:
+`src/Api/Program.cs`, `src/Api/CustomsClearance.Api.csproj`, `src/Api/Dockerfile`,
+`src/Api/appsettings.Development.json`, `docker-compose.yml`, `build/scripts/smoke-test.sh`,
+`tests/Integration/Api.IntegrationTests/TestApiFactory.cs`, `CustomsClearance.sln`.
+
+**Status**: Complete (not yet committed). Next unstarted item is **Day 40 — Integration Smoke Test**
+(auth → gateway → sample service → rules engine → audit → notification; a single sequential
+verification pass), pending explicit instruction to begin.

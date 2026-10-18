@@ -16,6 +16,7 @@ using CustomsClearance.Api.ConfigAdmin;
 using CustomsClearance.Api.Diagnostics;
 using CustomsClearance.Api.Identity;
 using CustomsClearance.Api.Notifications;
+using CustomsClearance.Api.ReferenceData;
 using CustomsClearance.Api.RulesAdmin;
 using CustomsClearance.Platform.Audit;
 using CustomsClearance.Platform.Audit.Persistence;
@@ -26,6 +27,7 @@ using CustomsClearance.Platform.Messaging;
 using CustomsClearance.Platform.Notifications;
 using CustomsClearance.Platform.Observability;
 using CustomsClearance.Platform.Persistence;
+using CustomsClearance.Platform.ReferenceData;
 using CustomsClearance.Platform.RulesEngine;
 using CustomsClearance.Platform.Security;
 using Microsoft.AspNetCore.Identity;
@@ -146,6 +148,15 @@ if (!string.IsNullOrWhiteSpace(notificationsConnectionString))
 }
 
 builder.Services.AddScoped<IEventHandler<DiagnosticsWidgetCreatedPayload>, DiagnosticsWidgetCreatedHandler>();
+
+// Day 39: reference/lookup tables (countries, currencies, units of
+// measure) seeded with PLACEHOLDER data (ADR-0033). Same connection-string-
+// presence convention as every other DbContext above.
+var referenceDataConnectionString = builder.Configuration.GetConnectionString("ReferenceDataDb");
+if (!string.IsNullOrWhiteSpace(referenceDataConnectionString))
+{
+    builder.Services.AddDbContext<ReferenceDataDbContext>(options => options.UseNpgsql(referenceDataConnectionString));
+}
 
 // Day 38: durable, append-only audit store (ADR-0032). When ConnectionStrings:
 // AuditDb is present, EfAuditWriter replaces the ConsoleAuditWriter that
@@ -400,6 +411,48 @@ if (app.Environment.IsDevelopment())
             }
         }
     }
+
+    // Day 39: same retry-with-backoff / EnsureCreatedAsync-then-
+    // CreateTablesAsync fallback as the other contexts, then seed the
+    // placeholder reference data (insert-missing-only, so safe on every start).
+    if (!string.IsNullOrWhiteSpace(referenceDataConnectionString))
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var scope = app.Services.CreateScope();
+                var referenceDb = scope.ServiceProvider.GetRequiredService<ReferenceDataDbContext>();
+
+                var created = await referenceDb.Database.EnsureCreatedAsync();
+                if (!created)
+                {
+                    var databaseCreator = (Microsoft.EntityFrameworkCore.Storage.RelationalDatabaseCreator)
+                        referenceDb.GetService<Microsoft.EntityFrameworkCore.Storage.IDatabaseCreator>();
+                    try
+                    {
+                        await databaseCreator.CreateTablesAsync();
+                    }
+                    catch (Npgsql.PostgresException ex) when (ex.SqlState == Npgsql.PostgresErrorCodes.DuplicateTable)
+                    {
+                        // Already created by a previous run - fine.
+                    }
+                }
+
+                var seeded = await ReferenceDataSeeder.SeedAsync(referenceDb);
+                app.Logger.LogInformation(
+                    "Reference data seeded: {Countries} countries, {Currencies} currencies, {Units} units inserted (placeholder data)",
+                    seeded.Countries, seeded.Currencies, seeded.Units);
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                app.Logger.LogWarning(ex, "ReferenceDataDb not ready (attempt {Attempt}/{MaxAttempts}), retrying in 2s...", attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+    }
 }
 
 // Order matters: correlation ID must be established before error handling
@@ -482,6 +535,13 @@ if (!string.IsNullOrWhiteSpace(notificationsConnectionString))
 if (!string.IsNullOrWhiteSpace(auditConnectionString))
 {
     app.MapAuditEndpoints();
+}
+
+// Day 39: read-only reference-data lookups, mapped only when the context is
+// registered (map-time bindability guard, as for every DB-backed API).
+if (!string.IsNullOrWhiteSpace(referenceDataConnectionString))
+{
+    app.MapReferenceDataEndpoints();
 }
 
 // Development-only diagnostic endpoints proving the platform libraries work

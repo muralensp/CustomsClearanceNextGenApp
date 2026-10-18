@@ -182,3 +182,18 @@ if ! echo "${AUDIT_RESPONSE}" | grep -q '"previousValue":"CiAuditOld"' || ! echo
 fi
 
 echo "Audit round-trip verified: config change recorded with old/new value, readable via /api/audit."
+
+echo "== Verifying seeded reference data (Platform.ReferenceData, Day 39) =="
+for LOOKUP in "countries/IN:India" "currencies/INR:Indian Rupee" "units/KGS:Kilograms"; do
+  LOOKUP_PATH="${LOOKUP%%:*}"
+  LOOKUP_EXPECTED="${LOOKUP#*:}"
+  LOOKUP_RESPONSE=$(curl -sf -H "Authorization: Bearer ${ADMIN_TOKEN}" "http://localhost:8080/api/reference/${LOOKUP_PATH}")
+  echo "${LOOKUP_PATH}: ${LOOKUP_RESPONSE}"
+  if ! echo "${LOOKUP_RESPONSE}" | grep -q "${LOOKUP_EXPECTED}"; then
+    echo "Reference lookup ${LOOKUP_PATH} did not return '${LOOKUP_EXPECTED}'."
+    docker compose logs api
+    exit 1
+  fi
+done
+
+echo "Reference data verified: placeholder countries, currencies and units seeded and readable."
