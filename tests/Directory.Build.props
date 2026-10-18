@@ -1,0 +1,18 @@
+<Project>
+  <!-- Keep the solution-wide settings (the nearest Directory.Build.props wins,
+       so the root one must be imported explicitly). -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- Day 43 / ADR-0038: transitive-dependency advisory overrides for TEST projects.
+       The old netstandard-1.x packages below arrive transitively via the test SDK /
+       test-platform packages and carry High advisories (flagged by
+       build/scripts/dependency-scan.sh). They are test-only and never ship, but the
+       scan gate is "no High/Critical", so we pin the patched versions here instead of
+       exempting them. Remove an entry once the upstream test packages stop pulling the
+       vulnerable version (the dependency scan will tell). -->
+  <ItemGroup>
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+</Project>

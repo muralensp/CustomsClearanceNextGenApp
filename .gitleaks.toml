@@ -1,0 +1,16 @@
+title = "BOSS NextGen gitleaks config (Day 43, ADR-0038)"
+
+[extend]
+# Keep every built-in rule; the allowlist below only suppresses the two
+# committed LOCAL-DEV-ONLY placeholders, by exact value, so a REAL secret in
+# the same files is still caught.
+useDefault = true
+
+[allowlist]
+description = "Committed local-development placeholders (never valid outside a developer machine)"
+regexes = [
+  # JWT signing key placeholder in src/Gateway/appsettings.json and src/Api/appsettings.Development.json
+  '''LOCAL-DEV-ONLY-PLACEHOLDER-KEY-NEVER-USE-IN-PRODUCTION-32B''',
+  # docker-compose / appsettings.Development.json dev Postgres password
+  '''devlocalonly''',
+]

@@ -21,6 +21,12 @@ name: CI
 # evidence file uploaded as a build artifact. Kept in lockstep with
 # build/azure-pipelines.yml (ADR-0005).
 #
+# Day 43 adds (ADR-0038): dependency-scan.sh (SCA), secret-scan.sh (gitleaks,
+# full history) and a final aggregate job named "CI passed" - the ONE stable
+# check name branch protection requires (docs/BRANCH-PROTECTION.md). CodeQL
+# (SAST) lives in its own workflow, .github/workflows/codeql.yml, and has no
+# Azure Pipelines equivalent - a deliberate lockstep exception, see ADR-0038.
+#
 # Deliberately thin: all real logic lives in build/scripts/*.sh so this
 # workflow can be re-hosted on Azure Pipelines later (per user decision)
 # with minimal translation - only the orchestration/trigger syntax changes,
@@ -31,6 +37,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 env:
   DOTNET_VERSION: '8.0.x'
@@ -193,3 +202,79 @@ jobs:
           name: e2e-smoke-evidence
           path: TestResults/e2e-evidence.txt
           retention-days: 7
+
+  dependency-scan:
+    name: Dependency Scan (SCA)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # Fails on High/Critical advisories (direct or transitive); Moderate/Low
+      # are printed as warnings. Exceptions: build/dependency-scan-allowlist.txt.
+      - name: Dependency vulnerability scan
+        run: bash build/scripts/dependency-scan.sh
+
+      - name: Upload dependency scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-report
+          path: TestResults/dependency-scan.json
+          retention-days: 7
+
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history - the scan covers every commit, not just the tip
+
+      - name: Secret scan (full history)
+        run: bash build/scripts/secret-scan.sh
+
+      - name: Upload secret scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-scan-report
+          path: TestResults/gitleaks-report.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Single aggregate check for branch protection. Runs even when a needed job
+  # failed or was cancelled (if: always()) and turns ANY result other than
+  # "success" - failure, cancelled, or skipped (every gating job is
+  # unconditional, so "skipped" can only mean an upstream failure) - into a
+  # failure. A skipped required check would otherwise be reported as passing.
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs:
+      - build
+      - lint
+      - test
+      - integration-test
+      - containerize
+      - contract-test
+      - e2e-smoke-test
+      - dependency-scan
+      - secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every gating job to have succeeded
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: |
+          echo "$NEEDS_JSON" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad=$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select(.value.result != "success") | .key' | paste -sd, -)
+          if [ -n "$bad" ]; then
+            echo "::error::Gating job(s) did not succeed: $bad"
+            exit 1
+          fi
+          echo "All gating jobs succeeded."
