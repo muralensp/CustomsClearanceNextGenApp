@@ -1060,7 +1060,10 @@ and fail runs were repeated after the fix. YAML validated; `bash -n` clean. No p
 survives the Gateway, event bus, audit store and publish log. It does **not** prove one business action
 flows through rules → audit → notification (no such wiring exists), and the correlation ID is not
 stored on decision-trace rows or the notification record. Observability signals and Day 37-39 negative
-behaviours are not re-verified. The new CI job had not yet run on GitHub when this was written.
+behaviours are not re-verified. **CI finding**: the new job's first GitHub run failed at check 17 (an unpolled one-shot read of
+`docker compose logs` raced the runner's log delivery); the check now polls and the failure dump uses
+`--tail=500`. Fixed and passing locally 20/20, but checks 18-20 have not yet run on CI, so the next CI
+run is the real confirmation. Lesson: a local pass can hide a timing race; poll, don't read logs once.
 
 **Files added**: `build/scripts/e2e-smoke-test.sh`; `adr/0034-phase-0-end-to-end-smoke-test.md`;
 `Phase-1_Architecture_Engineering_Prep/Day40_Execution_Log.md` (embeds the passing evidence).

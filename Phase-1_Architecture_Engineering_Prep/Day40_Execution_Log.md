@@ -71,6 +71,19 @@ result=PASS
 
 (`git_commit` is the last commit at run time; the Day 40 changes were not yet committed.)
 
+## Step 6 — First run on GitHub Actions failed; root cause was the script, not the product
+
+After the push, the new `e2e-smoke-test` job **failed** (the other six jobs passed). The CI log showed
+checks 1-16 passing and `FAIL [17] Publish log line for the notification event did not carry our
+correlation ID`. Cause: that one check read `docker compose logs` once, immediately after the request,
+while the equivalent widget-event check (10) *polls*; on the busier runner Docker's log delivery lagged a
+moment behind the container's stdout, so the line was not yet visible. The failure dump could not confirm
+this directly because `docker compose logs --tail=200` had already scrolled the Api's "Published event"
+lines out. Fix (separate follow-up commit): the check now polls (up to 20 s) like the others, and the
+failure dump uses `--tail=500`. Re-ran locally from a clean environment: 20/20, exit 0. **Not yet proven
+on GitHub**: checks 18-20 never executed on CI because the run stopped at 17, so the next CI run is the
+real confirmation. Local success had hidden a timing race that only the CI environment exposed.
+
 ## Environment notes
 
 Host port 5432 was free, so the unmodified `docker-compose.yml` was used throughout. No RabbitMQ
@@ -85,7 +98,8 @@ not stored on decision-trace rows or the notification record.
 
 ## Not done / deferred
 
-- The new CI job has not yet run on GitHub (first result comes with the push).
+- The new CI job failed on its first GitHub run (see Step 6); the fix is verified locally only until the
+  next CI run completes.
 - Negative/security cases, failure isolation and observability signals are not part of this pass.
 - Nothing committed or pushed (awaiting explicit instruction).
 - Pre-existing note, not new to Day 40: every script in `build/scripts/` is committed as mode 100644

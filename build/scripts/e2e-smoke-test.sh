@@ -60,7 +60,7 @@ fail() {
   cat "${BODY_FILE}" 2>/dev/null || true
   echo
   echo "--- container logs ---"
-  docker compose logs --tail=200
+  docker compose logs --tail=500
   echo
   evidence checks_passed "${CHECKS}"
   evidence failed_check "$((CHECKS + 1)): $1"
@@ -285,8 +285,11 @@ NOTIFY_EVENT_ID="$(json_string eventId)"
 [ -n "${NOTIFY_EVENT_ID}" ] || fail "Test event response lacked eventId"
 pass "NotificationRequested event ${NOTIFY_EVENT_ID} published"
 
-api_log_has "Published event NotificationRequested .*${NOTIFY_EVENT_ID}.*CorrelationId=${E2E_CORR}" \
-  || fail "Publish log line for the notification event did not carry our correlation ID"
+# Polled, not read once: `docker compose logs` can lag the container stdout by a
+# moment on a busy runner (found on the first CI run: an instant read missed a
+# line that had just been written).
+poll "the notification event publish log line carrying our correlation ID" 20 \
+  api_log_has "Published event NotificationRequested .*${NOTIFY_EVENT_ID}.*CorrelationId=${E2E_CORR}"
 pass "publish log line carries correlation ID ${E2E_CORR}"
 
 deliveries_ready() {

@@ -58,8 +58,11 @@ request):
   teardown still ran.
 - Both pipeline YAML files parse; `bash -n` is clean.
 - No product code changed, so the build/format/unit/integration results from Day 39 stand.
-- The new CI job has **not yet run on GitHub** at the time of writing; its first result comes with the
-  push.
+- **First GitHub run failed** (every other job passed): check 17 read the container log once, instantly,
+  and missed a line a busy runner had not yet delivered. It was a race in the script, not a product
+  defect; the check now polls like the others, and the failure dump was widened to `--tail=500`. After
+  the fix the script passes 20/20 locally; checks 18-20 have not yet executed on CI, so the next CI run is
+  the real confirmation.
 
 ## Consequences
 
