@@ -16,7 +16,7 @@ import { Counter } from 'k6/metrics';
 const BASE_URL = __ENV.BASE_URL || 'http://gateway:8080';
 const STEADY_SECONDS = parseInt(__ENV.STEADY_SECONDS || '30', 10);
 const LEVELS = (__ENV.VU_LEVELS || '1,10,25,50').split(',').map((v) => parseInt(v, 10));
-const PATHS = ['health', 'read', 'write'];
+const PATHS = (__ENV.PERF_PATHS || 'health,read,write').split(',');
 const GAP_SECONDS = 5; // quiet gap between levels so one level's tail does not bleed into the next
 
 const rateLimited = new Counter('rate_limited_429');

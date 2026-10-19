@@ -12,6 +12,7 @@
 #   bash build/scripts/perf-baseline.sh
 #   PERF_STEADY_SECONDS=10 PERF_VU_LEVELS=1,10 bash build/scripts/perf-baseline.sh    # quick check
 #   KEEP_STACK=1 bash build/scripts/perf-baseline.sh                                  # leave the stack up
+#   PERF_PATHS=write PERF_VU_LEVELS=25 bash build/scripts/perf-baseline.sh               # one path, one level
 #
 # Slots (docs/PARALLEL-WORK.md): honours COMPOSE_PROJECT_NAME and the other slot variables.
 set -uo pipefail
@@ -49,6 +50,7 @@ docker_memory_bytes={{.MemTotal}}' 2>/dev/null
   echo "rate_limit_permits=${GATEWAY_RATE_LIMIT_PERMITS} per ${GATEWAY_RATE_LIMIT_WINDOW_SECONDS}s"
   echo "steady_seconds=${PERF_STEADY_SECONDS:-30}"
   echo "vu_levels=${PERF_VU_LEVELS:-1,10,25,50}"
+  echo "paths=${PERF_PATHS:-health,read,write}"
   echo "other_running_containers_before=$(docker ps -q | wc -l | tr -d ' ')"
 } | tee "${OUT_DIR}/environment.txt"
 
@@ -74,6 +76,24 @@ if [ "${READY}" != "1" ]; then
   exit 1
 fi
 
+# /health is up before the Identity module can serve a login on a cold stack; the k6 setup logs in once, so wait
+# for a real login to succeed first instead of failing the whole run on the first request.
+echo "== Waiting for login to work =="
+LOGIN_OK=0
+for _ in $(seq 1 30); do
+  if [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://localhost:${GATEWAY_PORT_HOST}/auth/login" \
+        -H 'Content-Type: application/json' -d '{"username":"broker","password":"Broker-Dev-Pw-123!"}')" = "200" ]; then
+    LOGIN_OK=1
+    break
+  fi
+  sleep 2
+done
+if [ "${LOGIN_OK}" != "1" ]; then
+  echo "FAIL: login never succeeded" >&2
+  docker compose logs --tail=100 api >&2
+  exit 1
+fi
+
 # One warm-up pass so JIT, connection pools and caches are not part of the measured numbers.
 echo "== Warm-up (not measured) =="
 for _ in $(seq 1 50); do
@@ -94,7 +114,9 @@ STATS_PID=$!
 
 echo "== Running k6 =="
 # MSYS_NO_PATHCONV: Git Bash on Windows would rewrite the container path /scripts/... into a Windows path.
-MSYS_NO_PATHCONV=1 docker compose --profile perf run --rm k6 run /scripts/baseline.js
+# --no-deps: the stack is already up and warm. Without it, one run was seen to re-create PostgreSQL and
+# RabbitMQ underneath the running Api (killing its pooled connections, HTTP 500 on the first login).
+MSYS_NO_PATHCONV=1 docker compose --profile perf run --no-deps --rm k6 run /scripts/baseline.js
 K6_EXIT=$?
 echo "k6_exit=${K6_EXIT}" | tee -a "${OUT_DIR}/environment.txt"
 

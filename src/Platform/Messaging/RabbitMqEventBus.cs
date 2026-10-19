@@ -16,12 +16,17 @@ namespace CustomsClearance.Platform.Messaging;
 /// (different queue, same exchange) could subscribe to a subset of event
 /// types without this publisher changing.
 ///
-/// One shared IConnection (thread-safe per the RabbitMQ.Client docs), a
-/// new IModel per publish call - IModel itself is not thread-safe to
-/// share across concurrent calls, and a channel-per-publish is the
-/// documented-safe default; pooling channels is a later optimization if
-/// publish volume ever makes this a bottleneck (none observed at Day 24
-/// dev-time scale).
+/// One shared IConnection (thread-safe per the RabbitMQ.Client docs) and,
+/// since Day 45 (adr/0040-rabbitmq-publish-channel-reuse.md),
+/// ONE long-lived publishing IModel guarded by a lock, recreated if the
+/// broker closes it. IModel is not safe for concurrent publishes, so
+/// publishes are serialised; BasicPublish without confirms is a local
+/// buffer write, so the lock is held for microseconds. Before Day 45 this
+/// opened a channel, declared the exchange and closed the channel on EVERY
+/// publish (three synchronous broker round trips inside the request) and a
+/// Day 42/45 trace measurement showed that publish step taking ~4.6 ms of a
+/// 10 ms request unloaded and ~2.6 s of the slowest 2.7 s requests under
+/// load.
 ///
 /// Excluded from the ADR-0007 coverage gate: this class's real work is a
 /// live network connection to RabbitMQ, which this codebase has no
@@ -38,6 +43,8 @@ namespace CustomsClearance.Platform.Messaging;
 public sealed class RabbitMqEventBus : IEventPublisher, IDisposable
 {
     private readonly IConnection _connection;
+    private readonly object _publishLock = new();
+    private IModel? _publishChannel;
     private readonly RabbitMqOptions _options;
     private readonly ILogger<RabbitMqEventBus> _logger;
 
@@ -69,24 +76,35 @@ public sealed class RabbitMqEventBus : IEventPublisher, IDisposable
         activity?.SetTag("messaging.destination", _options.ExchangeName);
         activity?.SetTag("correlation_id", envelope.CorrelationId);
 
-        using var channel = _connection.CreateModel();
-        channel.ExchangeDeclare(_options.ExchangeName, ExchangeType.Topic, durable: true);
-
         var body = JsonSerializer.SerializeToUtf8Bytes(envelope);
-        var properties = channel.CreateBasicProperties();
-        properties.ContentType = "application/json";
-        properties.MessageId = envelope.EventId.ToString();
-        properties.Persistent = true;
-        if (activity?.Id is { } traceparent)
-        {
-            properties.Headers = new Dictionary<string, object> { ["traceparent"] = traceparent };
-        }
 
-        channel.BasicPublish(
-            exchange: _options.ExchangeName,
-            routingKey: envelope.EventType,
-            basicProperties: properties,
-            body: body);
+        lock (_publishLock)
+        {
+            try
+            {
+                var channel = GetPublishChannel();
+                var properties = channel.CreateBasicProperties();
+                properties.ContentType = "application/json";
+                properties.MessageId = envelope.EventId.ToString();
+                properties.Persistent = true;
+                if (activity?.Id is { } traceparent)
+                {
+                    properties.Headers = new Dictionary<string, object> { ["traceparent"] = traceparent };
+                }
+
+                channel.BasicPublish(
+                    exchange: _options.ExchangeName,
+                    routingKey: envelope.EventType,
+                    basicProperties: properties,
+                    body: body);
+            }
+            catch
+            {
+                // A channel that threw is in an unknown state: drop it so the next publish opens a fresh one.
+                DiscardPublishChannel();
+                throw;
+            }
+        }
 
         _logger.LogInformation(
             "Published event {EventType} v{EventVersion} ({EventId}) from {Source} to RabbitMQ exchange {Exchange}. CorrelationId={CorrelationId}",
@@ -100,8 +118,43 @@ public sealed class RabbitMqEventBus : IEventPublisher, IDisposable
         return Task.CompletedTask;
     }
 
+    // Callers hold _publishLock.
+    private IModel GetPublishChannel()
+    {
+        if (_publishChannel is { IsOpen: true } open)
+        {
+            return open;
+        }
+
+        DiscardPublishChannel();
+        var channel = _connection.CreateModel();
+        channel.ExchangeDeclare(_options.ExchangeName, ExchangeType.Topic, durable: true);
+        _publishChannel = channel;
+        return channel;
+    }
+
+    // Callers hold _publishLock (or are disposing).
+    private void DiscardPublishChannel()
+    {
+        var channel = _publishChannel;
+        _publishChannel = null;
+        try
+        {
+            channel?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Ignoring error while discarding the RabbitMQ publish channel");
+        }
+    }
+
     public void Dispose()
     {
+        lock (_publishLock)
+        {
+            DiscardPublishChannel();
+        }
+
         _connection.Close();
         _connection.Dispose();
     }
