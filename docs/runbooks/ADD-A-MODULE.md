@@ -165,7 +165,7 @@ module is meant to own tables. Capture exit codes unpiped.
    new bounded context module"), for a real bounded context.
 4. An ADR in `adr/` (`adr/template.md`) for any real decision, and an `Execution_Log.md` under
    `Phase-1_Architecture_Engineering_Prep/` with commands, exit codes and evidence.
-5. CLAUDE.md gets its log entry at integration, written by the orchestrator, not by the branch.
+5. CLAUDE.md gets a one-line table row at integration, written by the orchestrator, not by the branch.
 6. Update the module table in `docs/Architecture/README.md` and, if a container or flow changed, `docs/C4/README.md`.
 
 ## Removing a module (what the Scratch run did)

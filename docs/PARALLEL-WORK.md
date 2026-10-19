@@ -48,7 +48,7 @@ session, or whoever integrates). Branches may still *propose* edits; they resolv
 | `tests/Integration/Api.IntegrationTests/TestApiFactory.cs` | must blank each new connection string | Additive. A new context that is not blanked there breaks every integration test. |
 | `build/scripts/smoke-test.sh`, `e2e-smoke-test.sh` | a check/stage per capability | Append at the end of the relevant section. |
 | `.github/workflows/ci.yml` + `build/azure-pipelines.yml` | CI changes | Always edit both together (ADR-0005). |
-| `CLAUDE.md` | a log entry per piece of work | Orchestrator writes it at integration, from the branch's execution log - not the branch itself. |
+| `CLAUDE.md` | a one-line row per piece of work (detail goes in the execution log) | Orchestrator writes it at integration, from the branch's execution log - not the branch itself. |
 | `adr/NNNN-*.md` | numbered sequentially | **Reserve the number up front** (orchestrator assigns it in the task brief). Two branches both taking "the next number" is a certain collision. |
 
 Everything else - a module file, its `src/Platform/<Lib>/` project, its tests, its own ADR and execution
