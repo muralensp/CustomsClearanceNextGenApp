@@ -3,7 +3,7 @@
 # docker-compose.yml), since the Gateway project references sibling
 # Platform projects that live outside src/Gateway/.
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY CustomsClearance.sln Directory.Build.props ./
