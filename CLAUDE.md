@@ -132,10 +132,11 @@ One line per day; detail is in `Phase-1_Architecture_Engineering_Prep/DayNN_Exec
 | 46 | Gate 1 re-check: Pass with noted exceptions (build/format/215 tests/secret scan clean; asyncapi empty, WORK-ITEMS unused) | — |
 | 47 | Gate 2 dry run: Pass with noted exceptions (coverage gate proven to fail, SCA clean; rules-admin mutations unaudited) | — |
 | 48 | Regression pass: all suites green (E2E 20/20, integration 14/14, contract); RabbitMQ first-boot race recurred in contract run | — |
+| 49 | Phase 1 kickoff brief drafted (`docs/PHASE1-KICKOFF-BRIEF.md`); key open decision: tenancy model | — |
 
 ## Status
 
-Days 1-47 complete and merged to `main`. Day 48 done on branch `docs/day48-regression-pass` (PR pending). Days 49-50 not started — wait for explicit instruction.
+Days 1-48 complete and merged to `main`. Day 49 done on branch `docs/day49-phase1-kickoff-brief` (PR pending). Day 50 not started — wait for explicit instruction.
 Known open items: `docs/security/PHASE0_SECURITY_CHECKLIST.md` (recipient address in notification event
 payload, no TLS/security headers/login lockout, MFA/retention/DPDPA decisions); tariff sourcing decision
 (ADR-0042); Azure DevOps YAML never run anywhere; cross-bounded-context `ProjectReference` check is
