@@ -10,24 +10,23 @@ namespace CustomsClearance.Platform.Security;
 /// Default ITokenIssuer: mints a JWT signed with the same symmetric key
 /// AddCustomsClearanceAuthentication validates against, so a token issued
 /// here is immediately accepted by this same host's Bearer validation.
-/// 8-hour expiry is a Day 23 placeholder (no refresh-token flow yet -
-/// re-login is the only renewal path for now, acceptable for a Phase 0
-/// dev-time Identity stand-in per adr/0017).
+/// The lifetime is Jwt:AccessTokenMinutes (default 60; Day 45, ADR-0041).
+/// There is no refresh-token flow yet - re-login is the only renewal path
+/// for now, acceptable for a Phase 0 dev-time Identity stand-in per adr/0017.
 /// </summary>
 public sealed class JwtTokenIssuer : ITokenIssuer
 {
-    private static readonly TimeSpan _tokenLifetime = TimeSpan.FromHours(8);
-
     private readonly JwtOptions _options;
 
     public JwtTokenIssuer(IOptions<JwtOptions> options)
     {
         _options = options.Value;
+        _options.ValidateLifetime();
     }
 
     public IssuedToken IssueToken(Guid userId, string username, string role)
     {
-        var expiresAtUtc = DateTime.UtcNow.Add(_tokenLifetime);
+        var expiresAtUtc = DateTime.UtcNow.AddMinutes(_options.AccessTokenMinutes);
 
         var claims = new[]
         {

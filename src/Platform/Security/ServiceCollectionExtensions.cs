@@ -81,6 +81,7 @@ public static class ServiceCollectionExtensions
         }
 
         JwtKeyValidator.EnsureAcceptable(jwtOptions, environment);
+        jwtOptions.ValidateLifetime();
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
