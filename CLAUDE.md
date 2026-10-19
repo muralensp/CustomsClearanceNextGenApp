@@ -1198,3 +1198,15 @@ without Gateway paths.
 
 **Status**: Complete on branch `day-42/performance-baseline`; goes to `main` by pull request (branch protection).
 Days 41-44 are now all built. Next: the pilot metrics report, then Days 45-50, pending explicit instruction.
+
+### Multi-agent pilot - metrics report (Days 41, 43, 44)
+
+**Result**: `Phase-1_Architecture_Engineering_Prep/Multi_Agent_Pilot_Metrics_Report.md`. Active time was roughly
+halved (about 80 min measured: 49 min concurrent window + about 3 min finishing + about 27 min integration, against
+an **estimated** 2.5 to 3 h sequential), matching the 1.5x predicted, not the hoped-for 2x or more. Calendar time did
+not improve (16 h 11 min, 14 h 50 min of it waiting for the human). Zero merge conflicts; the integrated tree passed
+everything (CI 11/11 + CodeQL). No sequential baseline was measured and the foundation effort (module refactor,
+slots, ADR-0035) is not counted. Workers' self-reported durations (1.5-3 h) were 2-4x the transcript durations
+(about 49 min): verify from outputs, not worker narrative. Recommendation: use parallel workers selectively for
+independent work over disjoint files; not for build chains or work needing an idle machine; do not scale to
+per-bounded-context teams without a properly timed second comparison.
