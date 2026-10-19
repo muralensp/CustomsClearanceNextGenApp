@@ -34,6 +34,13 @@ updates:
     directory: "/src/Api"
     schedule:
       interval: "weekly"
+    ignore:
+      # The .NET 8 LTS pin (ADR-0001) applies to the container images too: the SDK and runtime images must
+      # move together, so a major bump is a deliberate task, not an automatic PR.
+      - dependency-name: "dotnet/sdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "dotnet/aspnet"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "build(docker)"
 
@@ -41,6 +48,13 @@ updates:
     directory: "/src/Gateway"
     schedule:
       interval: "weekly"
+    ignore:
+      # The .NET 8 LTS pin (ADR-0001) applies to the container images too: the SDK and runtime images must
+      # move together, so a major bump is a deliberate task, not an automatic PR.
+      - dependency-name: "dotnet/sdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "dotnet/aspnet"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "build(docker)"
 
