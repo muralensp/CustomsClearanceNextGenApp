@@ -6,7 +6,7 @@
 # Api project references sibling projects (e.g. Platform.Common) that live
 # outside src/Api/ - per ADR-0003's bounded-context-first structure.
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY CustomsClearance.sln Directory.Build.props ./
