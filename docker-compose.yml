@@ -251,6 +251,7 @@ services:
       - BASE_URL=http://gateway:8080
       - STEADY_SECONDS=${PERF_STEADY_SECONDS:-30}
       - VU_LEVELS=${PERF_VU_LEVELS:-1,10,25,50}
+      - PERF_PATHS=${PERF_PATHS:-health,read,write}
     volumes:
       - ./tests/Performance:/scripts:ro
       - ./TestResults/perf:/results

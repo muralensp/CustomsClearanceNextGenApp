@@ -1210,3 +1210,17 @@ slots, ADR-0035) is not counted. Workers' self-reported durations (1.5-3 h) were
 (about 49 min): verify from outputs, not worker narrative. Recommendation: use parallel workers selectively for
 independent work over disjoint files; not for build chains or work needing an idle machine; do not scale to
 per-bounded-context teams without a properly timed second comparison.
+
+### Day 45 - Buffer / Catch-up (in progress)
+
+Scope chosen by the user: four items, in order, each through its own PR: write-path investigation, low-risk Dependabot
+batch, security items needing no new design, India tariff-sourcing research. Log: `Day45_Execution_Log.md`.
+
+**1. Write-path investigation (ADR-0040)**: Tempo traces showed the RabbitMQ publish step was the cost of the
+Day 42 write-path plateau (about 2.6 s of the slowest 2.7 s requests; 4.6 ms of a 10 ms request unloaded). The
+publisher opened a channel, declared the exchange and closed the channel on every publish; `RabbitMqEventBus` now
+reuses one lock-guarded channel. Alternating before/after runs: about 2x write throughput at 25 users and the
+multi-second tail gone; recovery from a broker restart under load unchanged. Run-to-run variation on this machine is
+about 25-30% (previously unknown). Also fixed: the perf script could fail its first login because `compose run` was
+seen re-creating PostgreSQL and RabbitMQ (cause unknown; now `--no-deps` plus a login wait). Not established: why the
+old pattern stalled for a uniform ~2.6 s.
