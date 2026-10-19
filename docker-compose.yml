@@ -84,6 +84,10 @@ services:
       - Jwt__Key=${JWT_KEY:-LOCAL-DEV-ONLY-PLACEHOLDER-KEY-NEVER-USE-IN-PRODUCTION-32B}
       - ReverseProxy__Clusters__api-cluster__Destinations__api-destination__Address=http://api:8080/
       - Otlp__Endpoint=http://tempo:4317
+      # Day 42 (ADR-0037): Gateway rate limit, per client IP. Defaults are the original Day 22 values;
+      # the load test (tests/Performance) raises them for its own stack only.
+      - RateLimiting__PermitLimit=${GATEWAY_RATE_LIMIT_PERMITS:-100}
+      - RateLimiting__WindowSeconds=${GATEWAY_RATE_LIMIT_WINDOW_SECONDS:-10}
     depends_on:
       - api
       - tempo
@@ -234,6 +238,24 @@ services:
     ports:
       - "${TEMPO_OTLP_PORT:-4317}:4317"
       - "${TEMPO_HTTP_PORT:-3200}:3200"
+
+  # Day 42 (ADR-0037): load generator for the performance baseline. Only starts under
+  # `docker compose --profile perf run`, so a plain `docker compose up` never includes it. It joins the
+  # compose network and calls the Gateway by service name, so the load does not cross Docker Desktop's
+  # host port forwarding.
+  k6:
+    image: grafana/k6:0.54.0
+    profiles: ["perf"]
+    entrypoint: ["k6"]
+    environment:
+      - BASE_URL=http://gateway:8080
+      - STEADY_SECONDS=${PERF_STEADY_SECONDS:-30}
+      - VU_LEVELS=${PERF_VU_LEVELS:-1,10,25,50}
+    volumes:
+      - ./tests/Performance:/scripts:ro
+      - ./TestResults/perf:/results
+    depends_on:
+      - gateway
 
 volumes:
   postgres-dev-data:

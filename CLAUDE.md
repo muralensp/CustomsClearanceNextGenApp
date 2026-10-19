@@ -1097,7 +1097,7 @@ check, pilot) not started; Day 41 awaits explicit instruction.
 | Day | Deliverable | Key artifacts | ADR |
 |---|---|---|---|
 | 41 | Security Hardening - DB-level audit immutability (restricted role), JWT key guard, single correlation header, OpenTelemetry upgrade, Phase 0 security checklist | `adr/0036-*.md`, `docs/security/PHASE0_SECURITY_CHECKLIST.md`, `Day41_Execution_Log.md` | ADR-0036 |
-| 42 | Performance Baseline - **not started** (ADR-0037 reserved) | - | ADR-0037 |
+| 42 | Performance Baseline - configurable Gateway rate limit, k6 load scripts, first baseline report | `adr/0037-*.md`, `docs/performance/BASELINE-2026-10-19.md`, `tests/Performance/`, `build/scripts/perf-baseline.sh`, `Day42_Execution_Log.md` | ADR-0037 |
 | 43 | CI/CD Hardening - dependency scan, secret scan, CodeQL, Dependabot, `CI passed` aggregate, branch-protection runbook | `adr/0038-*.md`, `docs/BRANCH-PROTECTION.md`, `Day43_Execution_Log.md` | ADR-0038 |
 | 44 | Documentation skeleton - architecture overview, C4, RUN-LOCALLY / ADD-A-MODULE / DEPLOY runbooks | `adr/0039-*.md`, `docs/Architecture/`, `docs/C4/`, `docs/runbooks/`, `Day44_Execution_Log.md` | ADR-0039 |
 
@@ -1155,7 +1155,7 @@ only when asked" still applies; the push is now a branch plus a PR. Emergency es
 **Decision**: Architecture overview, C4 context and container diagrams (Mermaid), and three runbooks. "Service"
 in the plan is read as "module" (ADR-0039). DEPLOY.md is honest that no hosting target exists. The
 ADD-A-MODULE runbook was verified by adding a throwaway module, which was discovered with no `Program.cs` edit
-and then removed. The ten reconcile markers were filled after Days 41 and 43; two remain for Day 42.
+and then removed. The ten reconcile markers were filled after Days 41 and 43; the two Day 42 ones were filled when Day 42 finished.
 
 **Verification**: build, tests, `smoke-test.sh` and E2E 20/20 on the doc worker's own stack. Not verified:
 `dotnet run` outside Docker, `contract-test.sh`, Mermaid rendering on GitHub.
@@ -1168,5 +1168,33 @@ blocking, unit tests exit 0, integration tests 14 passed, `smoke-test.sh` exit 0
 Pilot note: the three workers each took roughly 1.5 to 3 hours of wall-clock; the pilot metrics report is not
 written yet.
 
-**Status**: Complete locally, **not pushed, so no CI run on the new jobs**. Next unstarted item is **Day 42 -
-Performance Baseline**, pending explicit instruction.
+**Status** (as of the integration): complete and pushed; CI 11/11 and CodeQL green; branch protection enabled
+afterwards (see the Day 43 update above).
+
+### Day 42 - Performance Baseline
+
+**Decision**: Settled four design questions with the user. The Gateway rate limit (hard-coded 100 per 10 s per IP)
+is now configuration (`RateLimiting:PermitLimit` / `WindowSeconds`, `RateLimitingOptions`, validated at
+start-up, defaults unchanged) so a one-machine load test is not answered with 429s. Load tool: k6 from Docker, a
+`k6` service under the compose `perf` profile (never starts with a plain `up`), called from inside the compose
+network. Scenarios: `health`, authenticated `read`, `write` (PostgreSQL + RabbitMQ), each at 1/10/25/50 virtual
+users for 30 s. On demand via `build/scripts/perf-baseline.sh`, deliberately not a CI job (shared runners too
+noisy; no targets exist to gate on).
+
+**Result** (one run, one laptop under Docker Desktop, everything on one host; full table in
+`docs/performance/BASELINE-2026-10-19.md`): zero failed requests and zero 429s at any level. At 50 users `health`
+~1,100 rps (p95 90 ms), `read` ~540 rps (p95 170 ms), `write` ~180 rps (p95 ~800 ms, p99 ~2 s); `write` stops
+scaling from about 10 users. Cause **not established**: the code opens and closes a RabbitMQ channel per publish
+and RabbitMQ showed the highest CPU, recorded as an untested hypothesis. No performance targets exist yet.
+
+**Bugs found while building it**: Git Bash rewrote the container path (`MSYS_NO_PATHCONV=1`); the first results
+table divided by the whole test duration, so every rps was ~11x too low (caught by hand-checking, fixed before the
+real run).
+
+**Verification**: Gateway build 0 warnings; default limiter unchanged (131x200 / 19x429 on a 150 burst, matching
+Day 22) and the configured value visible in the container; quick run exit 0; full run exit 0 with 12 scenarios and
+a clean teardown. **Not verified**: run-to-run variation (single run), the write-path cause, rules-engine/login/Api
+without Gateway paths.
+
+**Status**: Complete on branch `day-42/performance-baseline`; goes to `main` by pull request (branch protection).
+Days 41-44 are now all built. Next: the pilot metrics report, then Days 45-50, pending explicit instruction.

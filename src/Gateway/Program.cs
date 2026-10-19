@@ -23,6 +23,7 @@
 // wiring is needed for that propagation.
 
 using System.Threading.RateLimiting;
+using CustomsClearance.Gateway;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.Logging;
 using CustomsClearance.Platform.Observability;
@@ -54,6 +55,12 @@ builder.Services.AddCustomsClearanceTracing(
 // Values are a conservative dev-time default, not a tuned production
 // policy - production limits are a Phase 0 Day 26-30 (Observability/
 // capacity) concern once real traffic patterns exist.
+// Day 42 (ADR-0037): the values now come from the "RateLimiting" config
+// section; the defaults (100 per 10 s) are unchanged.
+var rateLimiting = builder.Configuration.GetSection(RateLimitingOptions.SectionName).Get<RateLimitingOptions>()
+    ?? new RateLimitingOptions();
+rateLimiting.Validate();
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -62,8 +69,8 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 100,
-                Window = TimeSpan.FromSeconds(10),
+                PermitLimit = rateLimiting.PermitLimit,
+                Window = TimeSpan.FromSeconds(rateLimiting.WindowSeconds),
                 QueueLimit = 0
             }));
 });
