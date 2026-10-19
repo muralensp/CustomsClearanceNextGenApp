@@ -130,10 +130,11 @@ One line per day; detail is in `Phase-1_Architecture_Engineering_Prep/DayNN_Exec
 | — | Multi-agent pilot metrics report (~1.5x active-time gain; use selectively) | — |
 | 45 | Buffer: RabbitMQ publish-channel reuse (~2x write throughput), internal-only `/metrics` + token lifetime, Dependabot batch, India tariff-sourcing research | 0040, 0041, 0042 (Proposed) |
 | 46 | Gate 1 re-check: Pass with noted exceptions (build/format/215 tests/secret scan clean; asyncapi empty, WORK-ITEMS unused) | — |
+| 47 | Gate 2 dry run: Pass with noted exceptions (coverage gate proven to fail, SCA clean; rules-admin mutations unaudited) | — |
 
 ## Status
 
-Days 1-45 complete and merged to `main`. Day 46 done on branch `docs/day46-gate1-recheck` (PR pending). Days 47-50 not started — wait for explicit instruction.
+Days 1-46 complete and merged to `main`. Day 47 done on branch `docs/day47-gate2-dryrun` (PR pending). Days 48-50 not started — wait for explicit instruction.
 Known open items: `docs/security/PHASE0_SECURITY_CHECKLIST.md` (recipient address in notification event
 payload, no TLS/security headers/login lockout, MFA/retention/DPDPA decisions); tariff sourcing decision
 (ADR-0042); Azure DevOps YAML never run anywhere; cross-bounded-context `ProjectReference` check is
