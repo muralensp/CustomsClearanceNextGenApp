@@ -83,7 +83,12 @@ requirements that depend on the hosting decision):
   headers, restricting `/metrics`, login lockout, MFA or an external IdP, a shorter token lifetime (8 hours
   today), and removing the recipient address from the notification event payload.
 
-<!-- RECONCILE-AFTER-42: Performance baseline / capacity expectations from Day 42 that inform sizing (link the report) - Day 42 not started yet -->
+**Capacity and sizing.** A first baseline exists ([../performance/BASELINE-2026-10-19.md](../performance/BASELINE-2026-10-19.md)),
+but it was measured on one laptop with every container on the same host, so it is **not** a sizing input. What
+it does say: nothing failed up to 50 concurrent users; the write path (PostgreSQL write plus RabbitMQ publish)
+stopped scaling at roughly 140-180 requests per second and its tail latency grew first; the Gateway rate limit is
+now settable (`RateLimiting__PermitLimit`, `RateLimiting__WindowSeconds`, default 100 per 10 s per client IP) and
+a production value still has to be chosen. Re-measure on the target hosting before sizing anything.
 
 ## 3. Pitfalls already visible in the images
 

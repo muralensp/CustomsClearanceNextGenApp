@@ -250,9 +250,16 @@ network only), `promtail`.
 | Container smoke | `build/scripts/smoke-test.sh` | Yes: builds and runs compose | pass/fail |
 | End-to-end smoke | `build/scripts/e2e-smoke-test.sh` (20 checks, evidence file) | Yes | pass/fail |
 
-`tests/Performance/` and `tests/Security/` exist but are empty.
+`tests/Security/` exists but is empty. `tests/Performance/` holds the k6 baseline script (Day 42).
 
-<!-- RECONCILE-AFTER-42: Performance baseline - numbers, tool, scenarios, where results live (Day 42, not started yet) -->
+**Performance baseline (Day 42, ADR-0037).** `bash build/scripts/perf-baseline.sh` runs k6 (a `perf`-profile
+service in compose) against the stack through the Gateway: `health`, an authenticated `read` and a `write`
+(PostgreSQL plus a RabbitMQ event), each at 1, 10, 25 and 50 virtual users. It is on demand, not a CI job. First
+result (one run, one laptop, 2026-10-19; `docs/performance/BASELINE-2026-10-19.md`): no failed requests; at 50
+users `health` about 1,100 rps (p95 90 ms), `read` about 540 rps (p95 170 ms), `write` about 180 rps (p95 about
+800 ms), with the write path no longer scaling beyond roughly 10 users. The Gateway rate limit is now
+configuration (`RateLimiting:PermitLimit` / `WindowSeconds`, defaults 100 per 10 s per IP). There are no
+performance targets or regression gates yet.
 
 ## 10. Security posture (what is true today)
 
