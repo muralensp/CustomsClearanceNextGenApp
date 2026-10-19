@@ -26,8 +26,9 @@ command output). An unticked box means it has not happened, whatever the rest of
 - [x] Branch protection enabled and configuration verified. Read back after enabling: checks
       `CI passed` and `Analyze (csharp)`, `enforce_admins` true, force-push false, deletion false, linear
       history true, 0 required approvals; `branches/main` reports `protected: true`.
-- [ ] A successful PR merged using squash merge with protection on (the positive check at the end of
-      section 3), so the gate is shown to pass as well as fail.
+- [x] A successful PR merged using squash merge with protection on (the positive check at the end of
+      section 3), so the gate is shown to pass as well as fail. PR #21 (docs only): all 12 checks green,
+      `CI passed` and `Analyze (csharp)` among them, `mergeStateStatus` `CLEAN`, squash-merged as `da9dfaf`.
 
 Zero required approvals is deliberate for a solo author (see the choices table in section 2), which makes the
 two automated checks the only quality gate. That is why the second and third boxes matter: both checks must
