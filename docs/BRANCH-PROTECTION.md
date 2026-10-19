@@ -7,6 +7,25 @@ commands below automatically.
 
 Repo: `muralensp/CustomsClearanceNextGenApp` (public).
 
+## Execution status
+
+Tick a box only when the step has actually been done, and put the evidence beside it (run URL, PR number,
+command output). An unticked box means it has not happened, whatever the rest of this document says.
+
+- [x] Both required check names verified on GitHub. Both ran on `main` commit `eb26dfe` and reported
+      success under exactly these names: `CI passed` (workflow run 39196201890) and `Analyze (csharp)`
+      (workflow run 39196201866).
+- [ ] Broken PR demonstrated to be blocked (section 3: a red `CI passed` on a deliberately broken PR, and
+      `gh pr merge --squash` refused). Until then `CI passed` has only been seen succeeding.
+- [ ] Branch protection enabled and configuration verified (section 2, then read the settings back with the
+      verify command and compare to the payload).
+- [ ] A successful PR merged using squash merge with protection on (the positive check at the end of
+      section 3), so the gate is shown to pass as well as fail.
+
+Zero required approvals is deliberate for a solo author (see the choices table in section 2), which makes the
+two automated checks the only quality gate. That is why the second and third boxes matter: both checks must
+report correctly, and protection must genuinely prevent a merge when either one fails.
+
 ## 1. What the gates are
 
 | Required check (exact name) | Source | What it covers |
