@@ -35,7 +35,7 @@ real compose stack (slot 1) on 2026-10-18/19.
 | 2.4 | DB password `devlocalonly`, `audit_writer` password, RabbitMQ `guest/guest` committed | ACCEPTED-GAP (dev) | Used only in `docker-compose.yml` and `appsettings.Development.json`. `appsettings.Development.json` is not loaded outside Development, so a non-Development host has no connection strings: modules stay disabled (it does not fall back to the dev password). Production credentials must come from a secrets store (OPEN until hosting is chosen, ADR-0008). |
 | 2.5 | Non-Development host silently running with dev credentials | PASS | Key: guarded (2.1). DB: not loaded (2.4). Seed users: Development-only (1.9). Image default: Production (2.2). |
 | 2.6 | Key rotation / vault | OPEN | No vault, no rotation process (Day 10: 90 days). Deferred with hosting. |
-| 2.7 | Secrets scanning in CI (Day 10 item 16) | OPEN | No scanner in `.github/workflows/ci.yml`. Needs a CI step (not changed here). |
+| 2.7 | Secrets scanning in CI (Day 10 item 16) | FIXED (Day 43, ADR-0038) | `build/scripts/secret-scan.sh` (gitleaks, full history) is a CI job. Passed locally on 32 commits; not yet run on GitHub. |
 | 2.8 | `.env` and local settings ignored | PASS | `.gitignore` lists `.env`, `*.local.json`. |
 
 ## 3. Encryption in transit (Day 10 item 5: TLS 1.2+ on every hop)
@@ -94,7 +94,7 @@ real compose stack (slot 1) on 2026-10-18/19.
 | 7.6 | Swagger exposure | PASS | Mapped only in Development (`Program.cs`); images now default to Production (2.2). |
 | 7.7 | Dev observability/messaging consoles open | ACCEPTED-GAP (dev) | Grafana anonymous Admin, Prometheus, Loki, Tempo, Mailpit UI and RabbitMQ management are published on host ports in the dev compose. Must not exist in any shared environment. |
 | 7.8 | Input validation / error leakage | PASS | `ExceptionHandlingMiddleware` returns the standard error body with a correlation ID, no stack traces (Day 16/34, unit-tested). |
-| 7.9 | Dependency (SCA) scanning | FIXED (finding) / OPEN (gate) | NU1902 on `OpenTelemetry.Exporter.OpenTelemetryProtocol` (GHSA-4625-4j76-fww9, fixed in 1.15.3) cleared by moving the OpenTelemetry packages 1.9.0 to 1.15.x; build is now 0 warnings. 1.11.2 was tested first and was still flagged. CI has no step that fails on a vulnerable package (warnings are not errors); needs a CI change. |
+| 7.9 | Dependency (SCA) scanning | FIXED (finding) / OPEN (gate) | NU1902 on `OpenTelemetry.Exporter.OpenTelemetryProtocol` (GHSA-4625-4j76-fww9, fixed in 1.15.3) cleared by moving the OpenTelemetry packages 1.9.0 to 1.15.x; build is now 0 warnings. 1.11.2 was tested first and was still flagged. Day 43 (ADR-0038) added `build/scripts/dependency-scan.sh` as a CI job that fails on High/Critical advisories; on the merged tree it reports 0 blocking and 0 warnings. Not yet run on GitHub, and it is not enforced until branch protection is enabled. |
 | 7.10 | SAST | PASS | SonarAnalyzer.CSharp in every build (ADR-0007); build 0 warnings. |
 | 7.11 | DAST, penetration test | OPEN | Scheduled pre-Phase 8 per Day 10. |
 | 7.12 | Digital signature for ICEGATE submissions | OPEN | Phase 8. |
@@ -105,6 +105,6 @@ real compose stack (slot 1) on 2026-10-18/19.
   Dockerfile environment default, NU1902, email redaction in notification errors/logs.
 - Needs a decision: MFA/IdP (1.8), token lifetime (1.6), notification PII design (6.2), `/metrics`
   exposure (7.5), security headers (7.3), retention (5.6), DPDPA handling (6.4).
-- Needs a CI change (not made, another workstream owns CI): secrets scanning (2.7), failing the build on a
-  vulnerable package (7.9).
+- CI changes, made afterwards on Day 43: secrets scanning (2.7) and failing the build on a vulnerable
+  package (7.9).
 - Everything under 3 and 4 is a production requirement that depends on the hosting decision.

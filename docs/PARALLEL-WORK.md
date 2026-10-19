@@ -26,6 +26,10 @@ Rules that came from real failures - keep them:
   the physical database every later module adds tables to (Day 23). Leave gaps (10, 20, 30...) so a new
   module slots in without renumbering. Orders and names must be unique - `ApiModuleCatalogTests` enforces it.
 - Infrastructure-free tests (ADR-0009): the module must do nothing when its connection string is blank.
+- **Update `ApiModuleCatalogTests`** in the same change: add the module to the expected-module list, and
+  (if it maps routes) to the "routes are not mapped when the connection string is blank" cases. Without
+  this the integration tests fail, which is the test doing its job, not a bug in discovery.
+- Also blank the new connection string in `TestApiFactory` (see section 2).
 
 ## 2. Who edits what
 
@@ -57,10 +61,18 @@ host ports (5432, 8080, 8025, ...) and over container, network and volume names.
 own numbered slot:
 
 ```bash
-eval "$(build/scripts/agent-env.sh 1)"     # slot 1 (use 1-9; 0 = the normal default stack)
+build/scripts/agent-env.sh 1                # prints the export lines for slot 1 (use 1-9; 0 = default stack)
+eval "$(build/scripts/agent-env.sh 1)"     # apply them to this shell
 bash build/scripts/e2e-smoke-test.sh        # now talks to slot 1's own gateway/mailpit
 docker compose ps                           # this slot's containers only
 ```
+
+Some restricted harnesses block `eval`/`source`. In that case run the first command, then put the printed
+`export` values in front of the same command line as `docker compose` and the scripts (the variables
+must be set in the same shell invocation as the command that uses them).
+
+A fresh `docker compose up -d --build` can exit 1 on the known RabbitMQ first-boot race (ADR-0028); a
+plain second `docker compose up -d` is the expected recovery.
 
 Slot N gets compose project `cc-slot-N` (so its own containers, network and named volumes), image tags
 prefixed `cc-slot-N`, and host ports offset by N x 1000 (SMTP by N). Nothing is overridden for slot 0,

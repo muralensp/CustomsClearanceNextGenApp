@@ -13,8 +13,8 @@ Local operation: [RUN-LOCALLY.md](RUN-LOCALLY.md). Architecture: [../Architectur
 
 | Artifact | Where | What it is | Caveat |
 |---|---|---|---|
-| Api image definition | `src/Api/Dockerfile` | Multi-stage: `mcr.microsoft.com/dotnet/sdk:8.0` build, `aspnet:8.0` runtime; listens on `:8080` | Sets `ENV ASPNETCORE_ENVIRONMENT=Development` (see section 3) |
-| Gateway image definition | `src/Gateway/Dockerfile` | Same pattern | Same `Development` default |
+| Api image definition | `src/Api/Dockerfile` | Multi-stage: `mcr.microsoft.com/dotnet/sdk:8.0` build, `aspnet:8.0` runtime; listens on `:8080` | Defaults `ENV ASPNETCORE_ENVIRONMENT=Production` since Day 41; compose overrides it to `Development` (see section 3) |
+| Gateway image definition | `src/Gateway/Dockerfile` | Same pattern | Same `Production` default |
 | Dev environment definition | `docker-compose.yml` | 10 services: gateway, api, postgres, rabbitmq, mailpit, loki, promtail, grafana, prometheus, tempo (plus 2 named volumes) | Dev defaults and committed placeholder credentials throughout; this is not a production topology |
 | CI "containerize" job | `.github/workflows/ci.yml` job *Containerize + Dev Environment Smoke Test* (runs `build/scripts/smoke-test.sh`) | Builds both images via compose, starts the stack, checks health + Postgres/RabbitMQ/notification/audit/reference-data round trips, tears down | The image is built and discarded; nothing is published |
 | CI end-to-end job | job *End-to-End Smoke Test* (`build/scripts/e2e-smoke-test.sh`) | 20-check cross-system pass, uploads an evidence file | Same: ephemeral |
@@ -29,7 +29,10 @@ Not present at all: image publishing (no registry push anywhere), versioned imag
 configuration, database migrations, health/readiness probes definition for an orchestrator beyond `/health`
 and `/__gateway/health`, backup/restore, rollback procedure.
 
-<!-- RECONCILE-AFTER-41-43: CI/CD facts after Day 43 - any new image scan / container job, whether an image is now built/tagged/published, the aggregate "CI passed" job and branch protection (link docs/BRANCH-PROTECTION.md). Update the table above and the "Not present" list if Day 43 changed them - from Worker doing Day 43 -->
+Day 43 (ADR-0038) added, none of it yet run on GitHub: *Dependency Scan (SCA)* and *Secret Scan (gitleaks)*
+jobs, a separate CodeQL workflow, Dependabot, and an aggregate *CI passed* job. It did not add image
+publishing, image scanning or tagging, so the "Not present" list above is unchanged. Branch protection is
+not enabled; see [../BRANCH-PROTECTION.md](../BRANCH-PROTECTION.md).
 
 ## 2. What a first real deployment would need (not done)
 
@@ -49,7 +52,7 @@ This is a checklist of gaps found by reading the repository, not a procedure.
    - `RabbitMq:*` (host, port, credentials, exchange, queue), `Email:*` (real relay), `Otlp:Endpoint`.
    - The Gateway's proxy destination (`ReverseProxy:Clusters:api-cluster:Destinations:...:Address`).
 4. **Database lifecycle**: in non-Development environments the Api creates **no** schema (the
-   `EnsureCreated`-based bootstrap runs only in Development, `Program.cs`), and there is no EF Core migration
+   `EnsureCreated`-based bootstrap runs only in Development, in each module's `InitializeAsync`), and there is no EF Core migration
    pipeline (ADR-0012, ADR-0025). A migration/bootstrap strategy, a non-owner runtime DB role, backups and a
    restore test are all needed.
 5. **Seed data policy**: dev personas (`IdentitySeeder`) are seeded in Development only and must never exist
@@ -64,15 +67,30 @@ This is a checklist of gaps found by reading the repository, not a procedure.
    security testing, runbook review, manual approval) need an environment to run in.
 10. **Rollback and incident runbooks**: none.
 
-<!-- RECONCILE-AFTER-41-43: Security-driven deployment requirements from Day 41 - how JWT key / secrets must be supplied in non-dev, audit-store DB role and its provisioning, Gateway hardening, anything in docs/security/ that a deployment must satisfy - from Worker doing Day 41. Fold into item 3 and 4 above. -->
+**Security requirements added by Day 41** (ADR-0036; the full list is
+`docs/security/PHASE0_SECURITY_CHECKLIST.md`, and sections 3 and 4 of that checklist are production
+requirements that depend on the hosting decision):
 
-<!-- RECONCILE-AFTER-41-43: Performance baseline / capacity expectations from Day 42 that inform sizing (link the report) - from Day 42 (not started when this was written) -->
+- **Environment**: both Dockerfiles now default to `ASPNETCORE_ENVIRONMENT=Production` (they used to bake in
+  `Development`). A non-Development host does no schema bootstrap, seeds no dev users and serves no Swagger.
+- **JWT key**: `Jwt__Key` must be supplied from a secret store, at least 32 bytes, identical for Gateway and
+  Api. Both hosts fail at start-up on the committed placeholder or a short key. There is no rotation process.
+- **Audit store**: the table, the restricted login role (INSERT and SELECT only) and its grants must be
+  provisioned by IaC or a DBA, since nothing bootstraps them outside Development. The running app must use
+  that role and must never hold the owner credential; DBA access to the table must itself be audited.
+- **Not done, so a deployment must address them**: TLS on every hop and HSTS, encryption at rest, security
+  headers, restricting `/metrics`, login lockout, MFA or an external IdP, a shorter token lifetime (8 hours
+  today), and removing the recipient address from the notification event payload.
+
+<!-- RECONCILE-AFTER-42: Performance baseline / capacity expectations from Day 42 that inform sizing (link the report) - Day 42 not started yet -->
 
 ## 3. Pitfalls already visible in the images
 
-- Both Dockerfiles bake `ASPNETCORE_ENVIRONMENT=Development`. In that mode the Api creates tables, seeds
-  dev users, and exposes Swagger and `/diagnostics/*` endpoints. Running these images unmodified anywhere
-  reachable is unsafe; the variable must be overridden.
+- Since Day 41 both Dockerfiles default to `ASPNETCORE_ENVIRONMENT=Production`, and `docker-compose.yml`
+  sets `Development` explicitly. In Development the Api creates tables, seeds dev users, and exposes Swagger
+  and `/diagnostics/*` endpoints, so never set that value on anything reachable. In Production the hosts also
+  refuse the committed JWT placeholder key, and with no connection strings supplied every database-backed
+  module stays disabled.
 - `docker-compose.yml` is the dev definition and also what CI exercises. Do not treat it as a deployment
   manifest, and do not point a production system at its credentials.
 - `build/scripts/contract-test.sh` is hard-coded to `localhost:8080` and `docker compose down -v` in every

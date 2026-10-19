@@ -18,6 +18,9 @@ project on the machine already holds one of them (5432 has clashed before, Day 3
 or use a slot (section 7).
 
 No `.env` file, no secrets to create: every credential in the dev stack is a committed dev-only placeholder.
+The JWT key can optionally be overridden with `JWT_KEY` in your shell (compose passes it to both services as
+`Jwt__Key`); unset, the committed placeholder is used, which is accepted only because compose runs the
+stack in Development.
 
 ## 2. Start the stack
 
@@ -109,7 +112,11 @@ curl -s http://localhost:8080/api/config -H "Authorization: Bearer $TOKEN"      
 Role per route is listed in the module table of the architecture overview. Swagger UI can also be used:
 log in, then paste the token into "Authorize".
 
-<!-- RECONCILE-AFTER-41-43: Whether dev JWT key / personas / login flow changed in Day 41 (e.g. key now supplied by env var or secret instead of the committed appsettings placeholder) - update section 1 ("no secrets to create") and section 5 accordingly - from Worker doing Day 41 -->
+The personas and the login flow did not change in Day 41. The only change that affects local work: the audit
+table is now accessed through a restricted `audit_writer` database role, created automatically by the
+Development bootstrap, so if you run the Api outside compose against your own Postgres, set both
+`ConnectionStrings:AuditDb` (role `audit_writer`) and `ConnectionStrings:AuditAdminDb` (the owner login), as
+`src/Api/appsettings.Development.json` does.
 
 ## 6. Tests
 

@@ -96,4 +96,14 @@ flowchart TB
 The only two images built from this repo are the Gateway and the Api host; the rest are pulled upstream
 images with configuration mounted from `observability/`.
 
-<!-- RECONCILE-AFTER-41-43: Any container/trust-boundary change from Day 41 (e.g. TLS termination, secrets source, DB roles) or Day 43 (e.g. image scanning) that alters this diagram - from Workers doing Day 41 and Day 43 -->
+Changes from Days 41 and 43 that do not alter the diagram's boxes but do change what the arrows mean:
+
+- **Api to PostgreSQL** is now two logins to the same database: the application's own role
+  (`customsclearance`) for most modules, and a restricted `audit_writer` role (INSERT and SELECT on the audit
+  table only) for the Audit module's runtime connection. A separate owner connection is used only by the
+  Development bootstrap (ADR-0036).
+- **Secrets source**: the JWT signing key can now be supplied through `Jwt__Key` (compose reads `JWT_KEY`);
+  outside Development the hosts refuse the committed placeholder. There is still no secrets store.
+- **No trust-boundary change**: there is still no TLS anywhere, the Api is still unpublished, and the Gateway
+  is still the only published application port. No image scanning was added (Day 43 scans dependencies and
+  source history, not built images).

@@ -1,0 +1,17 @@
+# Normalise line endings to LF on every platform so `dotnet format
+# --verify-no-changes` (.editorconfig: end_of_line = lf) passes in any checkout,
+# including worktrees on Windows.
+* text=auto eol=lf
+
+# Binary files: never touch.
+*.docx binary
+*.xlsx binary
+*.pptx binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.dll binary
+*.pfx binary

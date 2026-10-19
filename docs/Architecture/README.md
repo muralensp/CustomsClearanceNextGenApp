@@ -95,7 +95,12 @@ Facts about this flow:
 - The Api host is not published to the host machine in compose; only `gateway` publishes a port for the app.
 - Swagger UI is served by the Api host in Development only (reachable through the gateway catch-all).
 
-<!-- RECONCILE-AFTER-41-43: Gateway response headers (duplicate X-Correlation-Id fix, any security headers) and any change to Gateway auth/route policies - from Worker doing Day 41 -->
+- Since Day 41 (ADR-0036) a response carries exactly one `X-Correlation-Id`: `CorrelationIdMiddleware` sets
+  it when the response starts, replacing the copy the Api sends back through the proxy. The E2E script
+  asserts the count is 1.
+- No security headers (HSTS, nosniff, CSP, etc.) are set at the Gateway, and `/metrics` is reachable through
+  it without authentication. Both are open items in `docs/security/PHASE0_SECURITY_CHECKLIST.md` (7.3, 7.5).
+  The Gateway's auth and route policies did not change in Day 41.
 
 ## 3. The Api host and its modules (ADR-0035)
 
@@ -136,7 +141,14 @@ Roles (from `Platform.Security`): Broker, Supervisor, ComplianceOfficer, Admin.
 - Unit-of-work rule: `EfRepository` never calls `SaveChangesAsync`; the caller does, once per use case
   (ADR-0012).
 
-<!-- RECONCILE-AFTER-41-43: Audit-store database role / DB-level append-only enforcement (ADR-0032 carry-forward) and any change to how the Audit module connects - from Worker doing Day 41 -->
+- **Audit store database role (Day 41, ADR-0036).** The Audit module's runtime connection
+  (`ConnectionStrings:AuditDb`) logs in as the restricted role `audit_writer`, which the database allows to
+  `SELECT` and `INSERT` on `"AuditEvents"` only (plain `GRANT`/`REVOKE`, no trigger). A second, owner
+  connection (`ConnectionStrings:AuditAdminDb`) is used only by the Development bootstrap to create the table,
+  the role and the grants; it is idempotent. Without `AuditAdminDb` the module falls back to bootstrapping over
+  the runtime connection and logs a warning (no database-level enforcement). Outside Development nothing is
+  bootstrapped, so the table, role and grants must be provisioned separately. The table owner or a superuser
+  can still alter rows.
 
 ## 5. Event flow (ADR-0012, ADR-0018, ADR-0024)
 
@@ -240,7 +252,7 @@ network only), `promtail`.
 
 `tests/Performance/` and `tests/Security/` exist but are empty.
 
-<!-- RECONCILE-AFTER-41-43: Performance baseline - numbers, tool, scenarios, where results live (Day 42, not started when this was written) -->
+<!-- RECONCILE-AFTER-42: Performance baseline - numbers, tool, scenarios, where results live (Day 42, not started yet) -->
 
 ## 10. Security posture (what is true today)
 
@@ -251,13 +263,20 @@ Facts verified in code/config at the time of writing:
   `Platform.Security`.
 - The only key in the repo is a clearly marked dev placeholder in `appsettings*.json`; compose uses
   `devlocalonly` as the Postgres password and `guest/guest` for RabbitMQ. All of it is dev-only.
+  Since Day 41, outside Development both hosts refuse to start if `Jwt:Key` is the placeholder or shorter than
+  32 bytes (`JwtKeyValidator`); compose supplies the key as `Jwt__Key=${JWT_KEY:-<dev placeholder>}`. There is
+  no vault and no rotation process yet.
+- Both Dockerfiles now default `ASPNETCORE_ENVIRONMENT` to `Production`; `docker-compose.yml` sets
+  `Development` explicitly for the local and CI stack.
 - Dev personas are seeded only in Development (see RUN-LOCALLY.md).
-- Audit is a durable append-only store enforced **in the application** (`SaveChanges` rejects update/delete),
-  not at the database level (ADR-0032).
-- Personal data (notification recipient address) currently travels in the event payload (ADR-0031);
-  DPDPA 2023 handling is a standing requirement (ADR-0004).
-
-<!-- RECONCILE-AFTER-41-43: Security posture as changed by Day 41 - JWT key handling (how the key is supplied/rotated, dev vs non-dev), audit-store DB role, Gateway headers, any new threat-model/security docs under docs/security/ - from Worker doing Day 41. Replace or amend the bullets above if any is no longer true. -->
+- Audit is a durable append-only store enforced in the application (`SaveChanges` rejects update/delete)
+  **and, since Day 41, at the database level** by the restricted `audit_writer` role (see section 4).
+- Personal data (notification recipient address) still travels in the event payload (ADR-0031). Day 41 only
+  redacts the address from SMTP error text before it is logged or stored; removing it from the payload needs a
+  user-profile lookup and is an open decision. DPDPA 2023 handling is a standing requirement (ADR-0004).
+- The full item-by-item status (PASS / FIXED / ACCEPTED-GAP / OPEN) is
+  `docs/security/PHASE0_SECURITY_CHECKLIST.md`. Open decisions include MFA, the 8-hour token lifetime, login
+  lockout, security headers, `/metrics` exposure and audit retention.
 
 ## 11. CI/CD (summary of what the repo defines)
 
@@ -267,7 +286,21 @@ Environment Smoke Test, API Contract Tests, End-to-End Smoke Test. Each job runs
 `build/scripts/`. Static analysis is SonarAnalyzer.CSharp via `Directory.Build.props`; no SonarQube server
 (ADR-0007). Continuous *deployment* does not exist (ADR-0008).
 
-<!-- RECONCILE-AFTER-41-43: CI/CD pipeline after Day 43 - added scan jobs (what, which tools), the aggregate "CI passed" job, branch protection rules (link docs/BRANCH-PROTECTION.md) - from Worker doing Day 43 -->
+Day 43 (ADR-0038) added:
+
+- **Dependency Scan (SCA)**: `build/scripts/dependency-scan.sh` runs `dotnet list package --vulnerable
+  --include-transitive`; High/Critical advisories fail, Moderate/Low warn, and it refuses to report clean if
+  the advisory data could not be fetched. Dated exceptions go in `build/dependency-scan-allowlist.txt`
+  (empty). Test-project transitive pins live in `tests/Directory.Build.props`.
+- **Secret Scan**: `build/scripts/secret-scan.sh` runs gitleaks over the full git history with
+  `.gitleaks.toml`, which allowlists only the two committed dev placeholders by exact value.
+- **CodeQL** (C#) in its own workflow, `.github/workflows/codeql.yml`; it has no Azure Pipelines equivalent
+  (a documented lockstep exception). Dependabot is configured in `.github/dependabot.yml`.
+- **`CI passed`**: one aggregate job that needs the nine gating jobs and fails unless every one succeeded.
+  It is the single check name branch protection is meant to require (plus CodeQL's own check).
+- **Branch protection is not enabled.** `docs/BRANCH-PROTECTION.md` has the exact command; until it is run,
+  none of these gates can block a merge or a direct push. None of the new jobs had run on GitHub when this
+  was written.
 
 ## 12. Known limits and carry-forwards
 

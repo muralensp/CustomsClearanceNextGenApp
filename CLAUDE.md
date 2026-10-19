@@ -168,7 +168,7 @@ publish/handle round trip).
   `Phase-1_Architecture_Engineering_Prep/Day18_Persistence_and_Messaging_Libraries.docx`,
   `Day18_Execution_Log.md`, `Day18_Session_Summary.md` — new
 
-**Verification**: build (exit 0, 0 warnings), lint (exit 0), unit tests (exit 0, 7 projects, 96.5%
+**Verification**: build (exit 0, 0 warnings at the time; since Day 28 the build shows the known NU1902 warnings), lint (exit 0), unit tests (exit 0, 7 projects at the time; 12 by Day 40, 96.5%
 aggregate coverage), integration tests (exit 0, 6/6, 59ms, zero infrastructure dependency),
 container smoke test (exit 0, real Postgres round-trip, independently confirmed via direct `psql`
 query). Committed and pushed as `bcc353c`; all 6 GitHub Actions CI jobs confirmed green.
@@ -412,7 +412,7 @@ Proven instead via a live `docker compose` run and a new CI-enforced check.
 **Real bug found and fixed**: the same class of startup race as Day 18's Postgres finding —
 `docker-compose`'s `rabbitmq` healthcheck reports healthy once the Erlang node is up, before the
 AMQP listener actually accepts connections; the Api crashed with `BrokerUnreachableException` on
-first live run. Fixed with `RabbitMqConnectionHelper.CreateConnectionWithRetry` (10 attempts, 2s
+first live run. Fixed with `RabbitMqConnectionHelper.CreateConnectionWithRetry` (10 attempts at the time, later 20 - see Day 25; 2s
 backoff, synchronous since both call sites are eagerly-resolved constructors) — re-verified from a
 genuinely fresh `docker compose down -v`/`up --build` cycle.
 
@@ -1091,3 +1091,76 @@ vacuous and a real SMTP-port collision was found by the second). Not committed.
 
 **Status**: Complete (not yet committed). Next steps of the adoption plan (skills, Days 41-44 independence
 check, pilot) not started; Day 41 awaits explicit instruction.
+
+## Day-by-Day Deliverables Log (Phase 0, Week 9: Hardening & Documentation - Days 41-44)
+
+| Day | Deliverable | Key artifacts | ADR |
+|---|---|---|---|
+| 41 | Security Hardening - DB-level audit immutability (restricted role), JWT key guard, single correlation header, OpenTelemetry upgrade, Phase 0 security checklist | `adr/0036-*.md`, `docs/security/PHASE0_SECURITY_CHECKLIST.md`, `Day41_Execution_Log.md` | ADR-0036 |
+| 42 | Performance Baseline - **not started** (ADR-0037 reserved) | - | ADR-0037 |
+| 43 | CI/CD Hardening - dependency scan, secret scan, CodeQL, Dependabot, `CI passed` aggregate, branch-protection runbook | `adr/0038-*.md`, `docs/BRANCH-PROTECTION.md`, `Day43_Execution_Log.md` | ADR-0038 |
+| 44 | Documentation skeleton - architecture overview, C4, RUN-LOCALLY / ADD-A-MODULE / DEPLOY runbooks | `adr/0039-*.md`, `docs/Architecture/`, `docs/C4/`, `docs/runbooks/`, `Day44_Execution_Log.md` | ADR-0039 |
+
+Days 41, 43 and 44 were built in parallel by three worktree agents (the multi-agent pilot, ADR-0035) and
+integrated by the orchestrator; Day 42 is deliberately sequential after Day 41.
+
+### Day 41 - Security Hardening
+
+**Decision**: Audit immutability is enforced by the database, not a trigger (ADR-0001 portability): the
+Audit module's runtime connection is the restricted role `audit_writer` (SELECT and INSERT on `"AuditEvents"`
+only, plain GRANT/REVOKE); a separate owner connection `ConnectionStrings:AuditAdminDb` creates the table,
+role and grants in the Development bootstrap only. `JwtKeyValidator`: outside Development both hosts refuse
+the committed placeholder key or one under 32 bytes. `CorrelationIdMiddleware` now sets the response header at
+response start, so the Gateway no longer returns `X-Correlation-Id` twice. OpenTelemetry moved 1.9.0 to 1.15.x
+as one set (1.11.2 was still flagged), clearing NU1902; the build now has 0 warnings.
+
+**Real finding**: both Dockerfiles baked in `ASPNETCORE_ENVIRONMENT=Development`, so a deployed image would
+have run with the placeholder key, seeded users and Swagger. They now default to `Production`; compose sets
+Development explicitly.
+
+**Accepted / open** (full list in `docs/security/PHASE0_SECURITY_CHECKLIST.md`): the recipient address is still
+in the notification event payload (only SMTP error text is redacted); table owner or a superuser can still
+alter audit rows; no TLS, security headers or login lockout; `/metrics` reachable through the Gateway; 8-hour
+tokens (Day 10 says 15 minutes); MFA, retention and DPDPA handling need decisions.
+
+**Verification**: build 0 warnings; unit and integration tests exit 0; `smoke-test.sh` exit 0 with a new check
+that `audit_writer` can SELECT but UPDATE/DELETE/TRUNCATE are refused; E2E 20/20 (check 7 now asserts exactly
+one correlation header).
+
+### Day 43 - CI/CD Hardening
+
+**Decision**: Before today CI had no dependency scan, secret scan, CodeQL or aggregate check, and
+`CONTRIBUTING.md` wrongly said `main` was protected. Added `build/scripts/dependency-scan.sh` (High/Critical
+fail, Moderate/Low warn, refuses to report clean if advisory data is missing), `build/scripts/secret-scan.sh`
+(gitleaks over full history; `.gitleaks.toml` allowlists only the two dev placeholders by exact value),
+`.github/workflows/codeql.yml` (no Azure equivalent, documented), `.github/dependabot.yml`, and a `CI passed`
+aggregate job over nine gating jobs; `azure-pipelines.yml` kept in lockstep. The first scan found 3 real High
+advisories in test-only transitive packages, fixed with pins in `tests/Directory.Build.props` rather than
+exempted.
+
+**Verification**: each gate was shown to fail on a deliberately broken change in a scratch clone (failing test
+exit 1, lint exit 2, coverage drop exit 1, vulnerable package exit 1, secret-shaped strings exit 1) and to pass
+on the clean tree. **Not proven**: none of the new jobs, the `CI passed` logic, CodeQL or the Azure YAML has
+run on GitHub/Azure. **Branch protection is NOT enabled** (`docs/BRANCH-PROTECTION.md` has the command);
+until it is, no gate can block a merge or direct push.
+
+### Day 44 - Documentation Skeleton
+
+**Decision**: Architecture overview, C4 context and container diagrams (Mermaid), and three runbooks. "Service"
+in the plan is read as "module" (ADR-0039). DEPLOY.md is honest that no hosting target exists. The
+ADD-A-MODULE runbook was verified by adding a throwaway module, which was discovered with no `Program.cs` edit
+and then removed. The ten reconcile markers were filled after Days 41 and 43; two remain for Day 42.
+
+**Verification**: build, tests, `smoke-test.sh` and E2E 20/20 on the doc worker's own stack. Not verified:
+`dotnet run` outside Docker, `contract-test.sh`, Mermaid rendering on GitHub.
+
+### Integration of Days 41, 43 and 44
+
+Merged into local `main` (`8ab60d7`) and re-verified on the merged tree: build 0 warnings, dependency scan 0
+blocking, unit tests exit 0, integration tests 14 passed, `smoke-test.sh` exit 0, E2E 20/20. Also added
+`.gitattributes` (`* text=auto eol=lf`) so `dotnet format --verify-no-changes` works in Windows worktrees.
+Pilot note: the three workers each took roughly 1.5 to 3 hours of wall-clock; the pilot metrics report is not
+written yet.
+
+**Status**: Complete locally, **not pushed, so no CI run on the new jobs**. Next unstarted item is **Day 42 -
+Performance Baseline**, pending explicit instruction.
