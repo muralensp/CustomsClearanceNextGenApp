@@ -1224,3 +1224,10 @@ multi-second tail gone; recovery from a broker restart under load unchanged. Run
 about 25-30% (previously unknown). Also fixed: the perf script could fail its first login because `compose run` was
 seen re-creating PostgreSQL and RabbitMQ (cause unknown; now `--no-deps` plus a login wait). Not established: why the
 old pattern stalled for a uniform ~2.6 s.
+
+**3. Security items needing no new design (ADR-0041)**: user took the recommendations. The Gateway's `/metrics` is
+served only on an internal port (9100, never published) and is a 404 on the public port; the check is on the
+connection's local port because the Host header is spoofable (spoofed-Host request verified 404). Prometheus scrapes
+`gateway:9100`. Access-token lifetime is now `Jwt:AccessTokenMinutes` (default 60, was a hard-coded 8 h, validated
+1-1440); no refresh flow yet. Login throttling was deliberately documented as an accepted gap, not built (needs design
+with the identity provider). Security checklist items 1.6, 1.7, 7.5 updated.

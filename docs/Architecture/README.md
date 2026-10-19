@@ -17,7 +17,7 @@ Compliance, ...) are still empty scaffolding; Phase 0 built only the **foundatio
 
 | Component | Project | Role | ADR |
 |---|---|---|---|
-| Gateway | `src/Gateway` | Sole published edge: YARP reverse proxy, fixed-window rate limiter, JWT validation on selected routes, correlation-ID origination, own `/__gateway/health` and `/metrics` | 0016, 0019 |
+| Gateway | `src/Gateway` | Sole published edge: YARP reverse proxy, fixed-window rate limiter, JWT validation on selected routes, correlation-ID origination, own `/__gateway/health` and internal-only `/metrics` | 0016, 0019, 0041 |
 | Api host | `src/Api` | The one application host. Cross-cutting wiring in `Program.cs`; every capability is an `IApiModule` under `src/Api/Modules/` | 0003, 0035 |
 | Platform libraries | `src/Platform/*` | Shared, bounded-context-agnostic building blocks (section 6) | 0006, 0010-0012 |
 | PostgreSQL 16 | compose `postgres` | One database (`customsclearance_dev`), many DbContexts | 0001, 0012 |
@@ -89,7 +89,8 @@ Facts about this flow:
   (`/diagnostics/secure`, policy `RequireAdmin`) and a catch-all `api-route` with **no** policy. Every other
   route's authorization is decided by the Api host. Gateway auth is therefore a second check on one route, not
   a general perimeter.
-- The Gateway's own endpoints (`/__gateway/health`, `/metrics`) are mapped before the proxy catch-all.
+- The Gateway's own endpoints (`/__gateway/health`, `/metrics`) are mapped before the proxy catch-all. Since Day 45
+  `/metrics` is served only on an internal port (9100, not published) and is a 404 on the public port (ADR-0041).
 - Middleware order in both hosts: correlation ID, error handling, (Gateway: rate limiter), authentication,
   authorization.
 - The Api host is not published to the host machine in compose; only `gateway` publishes a port for the app.
@@ -98,8 +99,8 @@ Facts about this flow:
 - Since Day 41 (ADR-0036) a response carries exactly one `X-Correlation-Id`: `CorrelationIdMiddleware` sets
   it when the response starts, replacing the copy the Api sends back through the proxy. The E2E script
   asserts the count is 1.
-- No security headers (HSTS, nosniff, CSP, etc.) are set at the Gateway, and `/metrics` is reachable through
-  it without authentication. Both are open items in `docs/security/PHASE0_SECURITY_CHECKLIST.md` (7.3, 7.5).
+- No security headers (HSTS, nosniff, CSP, etc.) are set at the Gateway (open item 7.3 in
+  `docs/security/PHASE0_SECURITY_CHECKLIST.md`). `/metrics` is no longer reachable from outside (fixed Day 45, 7.5).
   The Gateway's auth and route policies did not change in Day 41.
 
 ## 3. The Api host and its modules (ADR-0035)
@@ -210,7 +211,7 @@ context references another (checked manually; automation is an ADR-0006 follow-u
 | Signal | Producer | Transport | Store | UI |
 |---|---|---|---|---|
 | Logs | Api + Gateway: JSON to stdout, `CorrelationId` field | Promtail scrapes Docker logs (`observability/promtail-config.yaml`) | Loki | Grafana (Loki datasource) |
-| Metrics | OpenTelemetry (ASP.NET Core HTTP metrics) at `/metrics` | Prometheus scrape every 15 s (`observability/prometheus.yml`, jobs `customsclearance-api`, `customsclearance-gateway`) | Prometheus | Grafana dashboard `api-gateway-overview` (5 panels) |
+| Metrics | OpenTelemetry (ASP.NET Core HTTP metrics) at `/metrics` (Gateway: internal port 9100 only) | Prometheus scrape every 15 s (`observability/prometheus.yml`, jobs `customsclearance-api`, `customsclearance-gateway`) | Prometheus | Grafana dashboard `api-gateway-overview` (5 panels) |
 | Traces | OpenTelemetry ASP.NET Core + HttpClient + custom messaging source, spans tagged with CorrelationId | OTLP gRPC to Tempo `:4317` | Tempo (local disk) | Grafana (Tempo datasource, trace-to-logs on `correlation_id`) |
 | Alerts | Grafana unified alerting, `observability/alerting/rules.yaml`: Service Down (critical), High 5xx Error Rate (warning) | - | Grafana | Grafana Alerting. **No contact point**: state only, nothing is delivered |
 
@@ -282,8 +283,9 @@ Facts verified in code/config at the time of writing:
   redacts the address from SMTP error text before it is logged or stored; removing it from the payload needs a
   user-profile lookup and is an open decision. DPDPA 2023 handling is a standing requirement (ADR-0004).
 - The full item-by-item status (PASS / FIXED / ACCEPTED-GAP / OPEN) is
-  `docs/security/PHASE0_SECURITY_CHECKLIST.md`. Open decisions include MFA, the 8-hour token lifetime, login
-  lockout, security headers, `/metrics` exposure and audit retention.
+  `docs/security/PHASE0_SECURITY_CHECKLIST.md`. Open decisions include MFA, security headers, audit
+  retention, DPDPA handling and the notification payload. Day 45 closed `/metrics` exposure, made the token
+  lifetime a 60-minute setting (no refresh yet) and recorded login lockout as a deliberate gap.
 
 ## 11. CI/CD (summary of what the repo defines)
 

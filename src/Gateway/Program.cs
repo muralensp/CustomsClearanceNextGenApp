@@ -78,6 +78,23 @@ builder.Services.AddRateLimiter(options =>
 var app = builder.Build();
 
 app.UseCustomsClearanceCorrelationId();
+
+// Day 45 (ADR-0041): "/metrics" is served ONLY on the internal metrics port (default 9100, never published
+// by docker-compose), where Prometheus scrapes it. On the public port (8080) it is a 404 - which also stops
+// the proxy catch-all from forwarding "/metrics" to the Api host's own endpoint. The check is on the
+// connection's real local port, not the Host header, because a client can send any Host header it likes.
+var metricsPort = builder.Configuration.GetValue("Metrics:InternalPort", 9100);
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/metrics", StringComparison.OrdinalIgnoreCase)
+        && context.Connection.LocalPort != metricsPort)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    await next();
+});
 app.UseCustomsClearanceErrorHandling();
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -93,6 +110,7 @@ app.MapGet("/__gateway/health", () => Results.Ok(new { status = "Healthy", servi
 // metrics, distinct from the Api host's (which Prometheus scrapes
 // separately at http://api:8080/metrics, an internal-only address). Also
 // mapped before the catch-all for the same reason as /__gateway/health.
+// Day 45: reachable only on the internal metrics port (see the middleware above).
 app.MapCustomsClearanceMetricsEndpoint();
 
 app.MapReverseProxy();

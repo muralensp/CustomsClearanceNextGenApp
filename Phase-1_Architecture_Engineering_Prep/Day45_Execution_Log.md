@@ -47,3 +47,22 @@ majors per ADR-0001), so they are not reopened.
 **Left open on purpose** (need a deliberate check that CI does not provide, e.g. that dashboards and alert rules still
 load): Grafana 11 to 13 (#7), Tempo 2.5 to 3.1 (#14), Prometheus 2 to 3 (#3), Promtail 2.9 to 3.6 (#12), Mailpit
 (#6), the Microsoft/EF Core group of 13 (#15) and the OpenTelemetry group (#16).
+
+## 3. Security items needing no new design (ADR-0041)
+
+Product Owner took the recommendations for all three.
+
+- **`/metrics` (checklist 7.5)**: served only on an internal Gateway port (9100, not published); a 404 on the public port.
+  The check uses the connection's local port, not the Host header (spoofable). Prometheus scrapes `gateway:9100`.
+- **Token lifetime (1.6)**: `Jwt:AccessTokenMinutes`, default 60 (was a hard-coded 8 h), range 1 to 1440, validated at
+  start-up. No refresh flow yet.
+- **Login throttling (1.7)**: documented as an accepted gap, deliberately not built (needs design decisions best made
+  with the identity provider).
+
+**Live verification**: `/metrics`, `/Metrics`, `/metrics/`, `/metrics?x=1`, POST and a spoofed `Host: localhost:9100` all
+404 on 8080; port 9100 unreachable from the host; Prometheus targets for gateway (`gateway:9100`) and api both up;
+`/health` and `/__gateway/health` 200; login expiry 60.0 minutes. Security unit tests 28 (from 18).
+
+**Not verified / limits**: the before-state of `/metrics` was not re-run live (it was found by reading the code on Day 41);
+the new Gateway middleware has no unit test (the Gateway has no test project); refresh tokens and lockout remain
+unbuilt.

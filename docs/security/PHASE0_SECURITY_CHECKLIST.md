@@ -19,8 +19,8 @@ real compose stack (slot 1) on 2026-10-18/19.
 | 1.3 | Password hashing | PASS | ASP.NET Core `PasswordHasher<T>` (PBKDF2, per-user salt) in login and `IdentitySeeder` (code). |
 | 1.4 | JWT validated at the Gateway AND the Api | PASS | Issuer, audience, signature and lifetime validated in both (`AddCustomsClearanceAuthentication`); ADR-0019 matrix, E2E check 6 (live). |
 | 1.5 | Role policies | PASS | `PlatformPolicies`/`PlatformRoles`; `RequireAdmin` etc. enforced on `/api/rules`, `/api/config`, `/api/audit`, `/api/notifications` (code; 401/403 matrices from Days 34-38). |
-| 1.6 | Token expiry | ACCEPTED-GAP | 8 h access token, no refresh (`JwtTokenIssuer`, ADR-0017). Day 10 says 15 min + refresh. Deferred with the real IdP (OIDC) - OPEN as a decision on whether to shorten sooner. `ClockSkew` is 30 s (PASS). |
-| 1.7 | Brute-force / lockout | ACCEPTED-GAP | No lockout or per-account throttle on `/auth/login`. Only the Gateway's global 100 req/10 s/IP limiter applies. Day 10 item 15 requires lockout after 5 failures if local accounts exist; they exist only as dev personas. Needed before any non-dev exposure. |
+| 1.6 | Token expiry | FIXED (partly; ADR-0041) / ACCEPTED-GAP (refresh) | Lifetime is now `Jwt:AccessTokenMinutes` (default **60**, was a hard-coded 8 h; accepted range 1 to 1440, checked at start-up). Live: a login returns `expiresAtUtc` 60.0 minutes ahead; 28 unit tests in `Platform.Security.Tests`. Day 10 says 15 min **plus refresh**; there is still no refresh-token flow, so a user re-logs in every hour. Set the value to 15 and users re-login every 15 minutes; a proper fix needs the real IdP (OIDC). `ClockSkew` is 30 s (PASS). |
+| 1.7 | Brute-force / lockout | ACCEPTED-GAP (decided Day 45: documented, not built) | No lockout or per-account throttle on `/auth/login`. Only the Gateway's global 100 req/10 s/IP limiter applies. Day 10 item 15 requires lockout after 5 failures if local accounts exist; they exist only as dev personas. Deliberately not built now because it needs design decisions (where failures are counted across Api instances, how and when an account unlocks, and how to stop an attacker locking real users out) that belong with the real identity provider. Needed before any non-dev exposure. |
 | 1.8 | MFA for Supervisor/Compliance/Admin | OPEN | Not implemented. Day 10 assumes an external IdP (no local accounts); ADR-0017 built an in-house stand-in instead. Decision needed when the IdP is chosen. |
 | 1.9 | Dev personas/passwords only in Development | PASS | Seeding runs only inside `if (app.Environment.IsDevelopment())` in `Program.cs` (code); passwords are in `IdentitySeeder.cs` (public repo, dev-only). |
 | 1.10 | Service-to-service auth | ACCEPTED-GAP | Gateway to Api is plain HTTP on the internal compose network; the Api re-validates the user JWT. No service token. Single deployable (ADR-0003), so no other internal hop exists yet. |
@@ -90,7 +90,7 @@ real compose stack (slot 1) on 2026-10-18/19.
 | 7.2 | Rate limiting | PASS (dev values) | Global fixed window, 100 req per 10 s per IP (Day 22). Not tuned. Another workstream owns changes to it. |
 | 7.3 | Security headers (HSTS, nosniff, X-Frame-Options, Referrer-Policy, CSP) | OPEN | None set at the Gateway (grep). Small to add, but needs TLS first for HSTS and a UI choice for CSP. |
 | 7.4 | Duplicate `X-Correlation-Id` response header | FIXED | `CorrelationIdMiddleware` now sets the response header at response start with the indexer, so the proxied copy is replaced. Live: `curl -i` through the Gateway shows one header; E2E check 7 now asserts the count is exactly 1. Unit test simulates a downstream that appends the header. Not re-demonstrated in its "before" state on this branch (the duplicate was observed on Day 38). |
-| 7.5 | `/metrics` reachable through the Gateway | OPEN | `MapCustomsClearanceMetricsEndpoint` is mapped on the Gateway, and the Api's `/metrics` is proxied by the catch-all route, with no authentication (code, not re-run live). Restrict to the internal network or require auth before any non-dev exposure. |
+| 7.5 | `/metrics` reachable through the Gateway | FIXED (Day 45, ADR-0041) | The Gateway's `/metrics` was mapped on the public port without authentication (found by reading the code on Day 41; the before-state was not re-run live). Now it is served only on an internal port (9100, never published); on the public port every `/metrics` request is a 404. Live: `/metrics`, `/Metrics`, `/metrics/`, `/metrics?x=1`, a POST and a request with a spoofed `Host: localhost:9100` header all return 404; port 9100 is not reachable from the host; Prometheus still scrapes `gateway:9100` and `api:8080` (both `up`). The check is on the connection's local port, not the Host header. The Api host's own `/metrics` stays internal because the Api is unpublished. |
 | 7.6 | Swagger exposure | PASS | Mapped only in Development (`Program.cs`); images now default to Production (2.2). |
 | 7.7 | Dev observability/messaging consoles open | ACCEPTED-GAP (dev) | Grafana anonymous Admin, Prometheus, Loki, Tempo, Mailpit UI and RabbitMQ management are published on host ports in the dev compose. Must not exist in any shared environment. |
 | 7.8 | Input validation / error leakage | PASS | `ExceptionHandlingMiddleware` returns the standard error body with a correlation ID, no stack traces (Day 16/34, unit-tested). |
@@ -103,8 +103,9 @@ real compose stack (slot 1) on 2026-10-18/19.
 
 - FIXED on Day 41: audit DB-level immutability, duplicate correlation header, JWT key fail-fast,
   Dockerfile environment default, NU1902, email redaction in notification errors/logs.
-- Needs a decision: MFA/IdP (1.8), token lifetime (1.6), notification PII design (6.2), `/metrics`
-  exposure (7.5), security headers (7.3), retention (5.6), DPDPA handling (6.4).
+- Needs a decision: MFA/IdP (1.8), notification PII design (6.2), security headers (7.3), retention (5.6),
+  DPDPA handling (6.4). Decided on Day 45 and no longer open: `/metrics` exposure (7.5, fixed), token lifetime
+  (1.6, now a 60-minute setting; refresh still needs the IdP), login lockout (1.7, documented not built).
 - CI changes, made afterwards on Day 43: secrets scanning (2.7) and failing the build on a vulnerable
   package (7.9).
 - Everything under 3 and 4 is a production requirement that depends on the hosting decision.

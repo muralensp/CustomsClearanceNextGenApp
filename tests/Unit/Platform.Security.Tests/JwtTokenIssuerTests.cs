@@ -53,7 +53,62 @@ public class JwtTokenIssuerTests
         var issued = issuer.IssueToken(Guid.NewGuid(), "admin", PlatformRoles.Admin);
 
         Assert.True(issued.ExpiresAtUtc > DateTime.UtcNow);
-        Assert.True(issued.ExpiresAtUtc <= DateTime.UtcNow.AddHours(8).AddMinutes(1));
+        Assert.True(issued.ExpiresAtUtc <= DateTime.UtcNow.AddMinutes(60).AddMinutes(1));
+    }
+
+    [Fact]
+    public void IssueToken_DefaultLifetimeIsSixtyMinutes()
+    {
+        var before = DateTime.UtcNow;
+
+        var issued = CreateIssuer().IssueToken(Guid.NewGuid(), "admin", PlatformRoles.Admin);
+
+        var lifetime = issued.ExpiresAtUtc - before;
+        Assert.InRange(lifetime.TotalMinutes, 59.9, 60.1);
+    }
+
+    [Fact]
+    public void IssueToken_HonoursConfiguredLifetime()
+    {
+        var options = Options.Create(new JwtOptions
+        {
+            Key = _testKey,
+            Issuer = _testIssuer,
+            Audience = _testAudience,
+            AccessTokenMinutes = 15,
+        });
+        var before = DateTime.UtcNow;
+
+        var issued = new JwtTokenIssuer(options).IssueToken(Guid.NewGuid(), "admin", PlatformRoles.Admin);
+
+        Assert.InRange((issued.ExpiresAtUtc - before).TotalMinutes, 14.9, 15.1);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    [InlineData(1441)]
+    public void Issuer_RejectsAnOutOfRangeLifetime(int minutes)
+    {
+        var options = Options.Create(new JwtOptions
+        {
+            Key = _testKey,
+            Issuer = _testIssuer,
+            Audience = _testAudience,
+            AccessTokenMinutes = minutes,
+        });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => new JwtTokenIssuer(options));
+
+        Assert.Contains("AccessTokenMinutes", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1440)]
+    public void ValidateLifetime_AcceptsTheBounds(int minutes)
+    {
+        new JwtOptions { AccessTokenMinutes = minutes }.ValidateLifetime();
     }
 
     [Fact]

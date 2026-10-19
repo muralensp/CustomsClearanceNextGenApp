@@ -80,8 +80,11 @@ requirements that depend on the hosting decision):
   provisioned by IaC or a DBA, since nothing bootstraps them outside Development. The running app must use
   that role and must never hold the owner credential; DBA access to the table must itself be audited.
 - **Not done, so a deployment must address them**: TLS on every hop and HSTS, encryption at rest, security
-  headers, restricting `/metrics`, login lockout, MFA or an external IdP, a shorter token lifetime (8 hours
-  today), and removing the recipient address from the notification event payload.
+  headers, login lockout, MFA or an external IdP, token refresh (the lifetime is now 60 minutes, set with
+  `Jwt__AccessTokenMinutes`), and removing the recipient address from the notification event payload.
+- **Metrics port (Day 45)**: the Gateway serves `/metrics` only on its internal port 9100 (`Metrics__InternalPort`),
+  which must never be published or exposed through a load balancer; Prometheus scrapes `gateway:9100`. The image
+  listens on 8080 and 9100 by default.
 
 **Capacity and sizing.** A first baseline exists ([../performance/BASELINE-2026-10-19.md](../performance/BASELINE-2026-10-19.md)),
 but it was measured on one laptop with every container on the same host, so it is **not** a sizing input. What

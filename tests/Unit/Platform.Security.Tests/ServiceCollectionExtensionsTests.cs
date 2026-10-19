@@ -46,4 +46,26 @@ public class ServiceCollectionExtensionsTests
 
         Assert.False(string.IsNullOrWhiteSpace(issued.AccessToken));
     }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("1441")]
+    public void AddCustomsClearanceTokenIssuance_OutOfRangeLifetime_ThrowsAtRegistration(string minutes)
+    {
+        var services = new ServiceCollection();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Key"] = "this-is-a-test-only-signing-key-not-for-production-use-32bytes",
+                ["Jwt:Issuer"] = "https://test.customsclearance.india",
+                ["Jwt:Audience"] = "customsclearance-api-tests",
+                ["Jwt:AccessTokenMinutes"] = minutes,
+            })
+            .Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => services.AddCustomsClearanceTokenIssuance(config));
+
+        Assert.Contains("AccessTokenMinutes", ex.Message);
+    }
 }

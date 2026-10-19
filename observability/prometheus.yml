@@ -13,4 +13,4 @@ scrape_configs:
 
   - job_name: "customsclearance-gateway"
     static_configs:
-      - targets: ["gateway:8080"]
+      - targets: ["gateway:9100"]   # internal metrics port; /metrics is a 404 on the public 8080 (Day 45)

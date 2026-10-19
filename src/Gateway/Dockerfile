@@ -32,7 +32,8 @@ WORKDIR /app
 COPY --from=build /app .
 
 EXPOSE 8080
-ENV ASPNETCORE_URLS=http://+:8080
+# 8080 is the published edge; 9100 is the internal metrics port (Day 45, ADR-0041) and is never published.
+ENV ASPNETCORE_URLS=http://+:8080;http://+:9100
 # Day 41 (ADR-0036): the image defaults to Production so a deployed image can never silently run as
 # Development (placeholder JWT key). docker-compose.yml sets ASPNETCORE_ENVIRONMENT=Development
 # explicitly for the local/CI stack.

@@ -113,7 +113,7 @@ unpiped surfaced the true failures.
 - The `EnsureCreatedAsync`-then-`CreateTablesAsync`-fallback pattern found here will recur for any
   future `DbContext` added to this same physical dev database before real EF Core migrations
   exist (Phase 0/3) - worth checking for on the next one, not re-discovering from scratch.
-- 8-hour token expiry with no refresh-token flow is a Day 23 placeholder; re-login is the only
+- (Update Day 45, ADR-0041: the lifetime is now the `Jwt:AccessTokenMinutes` setting, default 60.) 8-hour token expiry with no refresh-token flow is a Day 23 placeholder; re-login is the only
   renewal path for now - acceptable for a dev-time Identity stand-in, revisit once real usage
   patterns exist.
 - No registration/password-reset/user-management endpoints exist - intentionally out of scope;
