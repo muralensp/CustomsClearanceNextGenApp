@@ -78,3 +78,7 @@ NOT verifiable here (no `act`, nothing pushed): that `ci.yml` jobs run on GitHub
 - Real GitHub demonstration PR not performed.
 - OpenTelemetry Moderate advisories remain (warn only).
 - CRLF vs LF checkout on Windows: consider a `.gitattributes` (`* text=auto eol=lf`) in a separate change; not touched here.
+
+## Update 2026-10-19
+
+Branch protection on `main` is now enabled; the "Not enabled" and "NOT enabled" statements above describe Day 43 as it was. Evidence: `docs/BRANCH-PROTECTION.md`.

@@ -298,9 +298,9 @@ Day 43 (ADR-0038) added:
   (a documented lockstep exception). Dependabot is configured in `.github/dependabot.yml`.
 - **`CI passed`**: one aggregate job that needs the nine gating jobs and fails unless every one succeeded.
   It is the single check name branch protection is meant to require (plus CodeQL's own check).
-- **Branch protection is not enabled.** `docs/BRANCH-PROTECTION.md` has the exact command; until it is run,
-  none of these gates can block a merge or a direct push. None of the new jobs had run on GitHub when this
-  was written.
+- **Branch protection has been enabled since 2026-10-19** (`docs/BRANCH-PROTECTION.md`): `main` needs a PR and
+  green `CI passed` + `Analyze (csharp)`, admins included, and rejects direct pushes. All the new jobs ran
+  green on GitHub on the Day 41/43/44 integration push, and a deliberately broken PR was shown to be blocked.
 
 ## 12. Known limits and carry-forwards
 

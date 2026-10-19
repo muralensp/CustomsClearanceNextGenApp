@@ -1140,9 +1140,15 @@ exempted.
 
 **Verification**: each gate was shown to fail on a deliberately broken change in a scratch clone (failing test
 exit 1, lint exit 2, coverage drop exit 1, vulnerable package exit 1, secret-shaped strings exit 1) and to pass
-on the clean tree. **Not proven**: none of the new jobs, the `CI passed` logic, CodeQL or the Azure YAML has
-run on GitHub/Azure. **Branch protection is NOT enabled** (`docs/BRANCH-PROTECTION.md` has the command);
-until it is, no gate can block a merge or direct push.
+on the clean tree. All the new jobs then ran green on GitHub on the integration push (CI 11/11, CodeQL
+`Analyze (csharp)`). **Not proven**: the Azure YAML has never run anywhere.
+
+**Update 2026-10-19 - branch protection enabled** (`docs/BRANCH-PROTECTION.md`, payload as documented: PR
+required, checks `CI passed` + `Analyze (csharp)`, `enforce_admins` true, 0 approvals, no force-push or
+deletion, linear history). Proven on real GitHub with demo PR #20 (closed unmerged): a failing test made
+`CI passed` red, the merge was refused (`BLOCKED`), and a direct push to `main` was rejected (GH006). From
+here **every change to `main` goes through a PR** (squash or rebase). The working-agreement rule "commit/push
+only when asked" still applies; the push is now a branch plus a PR. Emergency escape hatch is in the runbook.
 
 ### Day 44 - Documentation Skeleton
 
