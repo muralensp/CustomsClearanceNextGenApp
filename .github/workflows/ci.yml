@@ -70,7 +70,7 @@ jobs:
         run: bash build/scripts/build.sh
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-output
           path: '**/bin/Release/**'
@@ -116,7 +116,7 @@ jobs:
 
       - name: Upload test results and coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: TestResults/
@@ -139,7 +139,7 @@ jobs:
 
       - name: Upload integration test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-test-results
           path: TestResults/
@@ -177,7 +177,7 @@ jobs:
 
       - name: Upload contract test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: contract-test-results
           path: TestResults/newman-results.xml
@@ -197,7 +197,7 @@ jobs:
 
       - name: Upload end-to-end evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-smoke-evidence
           path: TestResults/e2e-evidence.txt
@@ -221,7 +221,7 @@ jobs:
 
       - name: Upload dependency scan report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dependency-scan-report
           path: TestResults/dependency-scan.json
@@ -240,7 +240,7 @@ jobs:
 
       - name: Upload secret scan report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: secret-scan-report
           path: TestResults/gitleaks-report.json
