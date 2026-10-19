@@ -1,9 +1,13 @@
 # Branch protection for `main`
 
-**Status: NOT ENABLED.** As of Day 43 nothing on GitHub enforces the rules below; `main` accepts direct
-pushes. The pipeline (Day 43, ADR-0038) is ready to be the enforcement mechanism, but turning protection on
-is a GitHub *settings* change that the Product Owner makes deliberately. Nothing in this repo runs the
-commands below automatically.
+**Status: ENABLED on 2026-10-19** with the payload in section 2 (read back and confirmed via the API).
+`main` now requires a pull request and the checks `CI passed` and `Analyze (csharp)`; admins are not exempt
+(`enforce_admins: true`); force-push and deletion are blocked; history must stay linear. Before that date
+(Day 43) nothing enforced these rules. Nothing in this repo applies or changes the setting automatically.
+
+Proven on real GitHub (PR #20, closed unmerged): a deliberately broken PR showed `CI passed` red, its merge
+was refused ("the base branch policy prohibits the merge"), and a direct push to `main` was rejected with
+`GH006 Protected branch update failed: Changes must be made through a pull request`.
 
 Repo: `muralensp/CustomsClearanceNextGenApp` (public).
 
@@ -15,10 +19,13 @@ command output). An unticked box means it has not happened, whatever the rest of
 - [x] Both required check names verified on GitHub. Both ran on `main` commit `eb26dfe` and reported
       success under exactly these names: `CI passed` (workflow run 39196201890) and `Analyze (csharp)`
       (workflow run 39196201866).
-- [ ] Broken PR demonstrated to be blocked (section 3: a red `CI passed` on a deliberately broken PR, and
-      `gh pr merge --squash` refused). Until then `CI passed` has only been seen succeeding.
-- [ ] Branch protection enabled and configuration verified (section 2, then read the settings back with the
-      verify command and compare to the payload).
+- [x] Broken PR demonstrated to be blocked. PR #20 (failing test `Demo_BrokenOnPurpose`): Unit Tests
+      + Coverage Gate and `CI passed` red, the other nine checks green (workflow run 39204890681; the
+      `CI passed` log lists `test: failure`). With protection on, `mergeStateStatus` was `BLOCKED` and
+      `gh pr merge 20 --squash` was refused. A direct `git push origin main` was rejected with GH006.
+- [x] Branch protection enabled and configuration verified. Read back after enabling: checks
+      `CI passed` and `Analyze (csharp)`, `enforce_admins` true, force-push false, deletion false, linear
+      history true, 0 required approvals; `branches/main` reports `protected: true`.
 - [ ] A successful PR merged using squash merge with protection on (the positive check at the end of
       section 3), so the gate is shown to pass as well as fail.
 

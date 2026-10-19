@@ -32,7 +32,8 @@ and `/__gateway/health`, backup/restore, rollback procedure.
 Day 43 (ADR-0038) added, none of it yet run on GitHub: *Dependency Scan (SCA)* and *Secret Scan (gitleaks)*
 jobs, a separate CodeQL workflow, Dependabot, and an aggregate *CI passed* job. It did not add image
 publishing, image scanning or tagging, so the "Not present" list above is unchanged. Branch protection is
-not enabled; see [../BRANCH-PROTECTION.md](../BRANCH-PROTECTION.md).
+enabled on `main` since 2026-10-19 (PR required, `CI passed` and `Analyze (csharp)` must pass); see
+[../BRANCH-PROTECTION.md](../BRANCH-PROTECTION.md).
 
 ## 2. What a first real deployment would need (not done)
 

@@ -4,7 +4,7 @@ This project is developed solo (one human, one AI pairing partner). This guide s
 
 ## Branching
 
-- `main` is meant to be always deployable and protected, with no direct commits. **Interim state (Day 43): the CI gates exist, but GitHub branch protection is NOT yet enabled**, so GitHub does not currently stop a direct push to `main` or a merge with a red check; until the Product Owner enables it (exact command and rationale: [`docs/BRANCH-PROTECTION.md`](docs/BRANCH-PROTECTION.md)), following this rule is on the author. Once enabled, the required checks are `CI passed` and `Analyze (csharp)`.
+- `main` is meant to be always deployable and protected, with no direct commits. **GitHub branch protection has been enabled since 2026-10-19**: a direct push to `main` is rejected, every change goes through a pull request, and the required checks `CI passed` and `Analyze (csharp)` must be green before it can merge (administrators included). Merge with squash or rebase (history must stay linear). Details, rationale and the emergency escape hatch: [`docs/BRANCH-PROTECTION.md`](docs/BRANCH-PROTECTION.md).
 - `release/*` branches only when preparing a production release.
 - No long-lived `develop`/`staging` branches.
 

@@ -45,3 +45,7 @@ The first dependency scan also found **real High advisories on the existing tree
 ## Related
 
 ADR-0004 (SCA/SAST requirement), ADR-0005 (lockstep), ADR-0007 (coverage/static analysis), ADR-0009, ADR-0034, ADR-0022 (OpenTelemetry advisory), `docs/quality-gates/Gate2_Backend_Review.md`, `Gate5_Release_Review.md`.
+
+## Update 2026-10-19
+
+Branch protection described in item 7 above is now enabled (PR required, `CI passed` and `Analyze (csharp)` required, `enforce_admins` true, 0 approvals). A deliberately broken PR (#20) was shown to be blocked; see `docs/BRANCH-PROTECTION.md`.
