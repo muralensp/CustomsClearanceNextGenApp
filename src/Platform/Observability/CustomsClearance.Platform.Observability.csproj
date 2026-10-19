@@ -20,12 +20,16 @@
 
   <ItemGroup>
     <!-- Day 41: moved 1.9.0 -> 1.15.x as one aligned set to clear NU1902 /
-         GHSA-4625-4j76-fww9 on the OTLP exporter (ADR-0036). -->
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
-    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.15.3-beta.1" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
+         GHSA-4625-4j76-fww9 on the OTLP exporter (ADR-0036).
+         Keep the Prometheus exporter's beta on the same minor as the SDK: with the SDK at 1.20 and the exporter left at
+         1.15.3-beta.1, every histogram (http_server_request_duration_seconds_*) silently vanished while CI stayed green. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.20.0-beta.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
   </ItemGroup>
 
   <!-- Day 28 - CorrelationIdMiddleware.HeaderName, to tag every trace span

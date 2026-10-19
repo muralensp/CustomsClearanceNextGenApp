@@ -78,6 +78,7 @@ file is preserved verbatim in `docs/PROJECT_HISTORY.md` (not auto-loaded; read i
 - RabbitMQ first-boot race / `.erlang.cookie eacces` crashes: a plain second `up` succeeds
   (`restart: on-failure:5`, ADR-0028); persistent failures have been stray volumes or a corrupt local
   image — inspect `docker ps -a` / `docker volume ls` before changing config.
+- Green CI does not prove telemetry. After OpenTelemetry bumps, check Prometheus still has `http_server_request_duration_seconds_count` (the Prometheus exporter beta must match the SDK minor).
 - Worker/agent self-reported durations were 2-4x the real ones: verify from outputs, not narrative.
 - Reference-data (countries, currencies, UQC units) is unverified placeholder data (`IsVerified=false`);
   never treat it as authoritative. Tariff/ITC-HS sourcing is an open decision (ADR-0042, Proposed).
