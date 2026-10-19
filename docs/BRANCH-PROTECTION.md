@@ -92,9 +92,9 @@ Do this **before** enabling protection (so the check names exist), then repeat s
    `git switch main && git pull && git switch -c test/ci-gate-demo`
 2. Make one cheap, unambiguous break. Easiest: a failing unit test, e.g. in any `tests/Unit/**` test class add
    `[Fact] public void Demo_BrokenOnPurpose() => Assert.True(false);`
-   (Other options, one per gate: a badly formatted line -> Lint; a hard-coded string such as
-   `const string k = "AKIAIOSFODNN7EXAMPLE";` is allowlisted by gitleaks as a documented AWS example, so use a
-   realistic-looking token instead, e.g. `ghp_` followed by 36 random alphanumerics -> Secret Scan; a
+   (Other options, one per gate: a badly formatted line -> Lint; a hard-coded realistic-looking token, e.g. `ghp_` followed by 36
+   random alphanumerics (do NOT use a real one) -> Secret Scan (note: an `...EXAMPLE` AWS key may be ignored by
+   gitleaks' own stopwords, so use a random-looking value); a
    `<PackageReference Include="System.Net.Http" Version="4.3.0" />` in a `src/` project -> Dependency Scan.)
 3. Commit and push: `git commit -am "test(ci): deliberately broken change" && git push -u origin test/ci-gate-demo`
 4. Open the PR: `gh pr create --base main --title "DEMO: CI must block this" --body "Deliberately broken; do not merge."`
