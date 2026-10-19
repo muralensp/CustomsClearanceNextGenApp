@@ -1211,7 +1211,7 @@ slots, ADR-0035) is not counted. Workers' self-reported durations (1.5-3 h) were
 independent work over disjoint files; not for build chains or work needing an idle machine; do not scale to
 per-bounded-context teams without a properly timed second comparison.
 
-### Day 45 - Buffer / Catch-up (in progress)
+### Day 45 - Buffer / Catch-up
 
 Scope chosen by the user: four items, in order, each through its own PR: write-path investigation, low-risk Dependabot
 batch, security items needing no new design, India tariff-sourcing research. Log: `Day45_Execution_Log.md`.
@@ -1231,3 +1231,12 @@ connection's local port because the Host header is spoofable (spoofed-Host reque
 `gateway:9100`. Access-token lifetime is now `Jwt:AccessTokenMinutes` (default 60, was a hard-coded 8 h, validated
 1-1440); no refresh flow yet. Login throttling was deliberately documented as an accepted gap, not built (needs design
 with the identity provider). Security checklist items 1.6, 1.7, 7.5 updated.
+
+**4. India tariff-sourcing research (ADR-0042, Proposed)**: web research only; options note in
+`docs/research/INDIA-TARIFF-SOURCING-OPTIONS.md`. Customs Tariff (CBIC), ITC-HS (DGFT) and the effective duty stack
+(ICEGATE) are separate data sets; no official bulk download or API was found; nomenclature changes with the Finance Act,
+rates by notification at any time. Recommendation to evaluate a hybrid (official documents plus a cross-check feed), with
+no decision taken. Facts are from web search and mostly unverified; official sites could not be opened and no licence was
+read in full. Item 2 (Dependabot batch) is recorded in the execution log.
+
+**Status**: all four Day 45 items done once PR for item 4 merges. Days 46-50 not started, pending explicit instruction.
