@@ -66,3 +66,18 @@ Product Owner took the recommendations for all three.
 **Not verified / limits**: the before-state of `/metrics` was not re-run live (it was found by reading the code on Day 41);
 the new Gateway middleware has no unit test (the Gateway has no test project); refresh tokens and lockout remain
 unbuilt.
+
+## 4. India tariff-sourcing research (ADR-0042)
+
+Web research only, no code. Output: `docs/research/INDIA-TARIFF-SOURCING-OPTIONS.md` (sources, update cadence, four
+Phase 1 options, open questions for the Product Owner).
+
+- **Found**: the Customs Tariff (CBIC), ITC-HS (DGFT) and the effective duty stack (ICEGATE) are three separate data sets;
+  official publication appears to be PDFs and web tools, with no bulk download or API found; nomenclature changes with
+  the Finance Act, rates by notification at any time; DGFT Notification 26/2026-27 (27 Jul 2026) aligned Schedule II with
+  the Finance Act 2026; the next HS edition is reported for 1 Jan 2028.
+- **Not established**: whether any official machine-readable feed or reuse notice exists (cbic.gov.in failed with a
+  certificate error in the fetch tool); whether data.gov.in has a tariff dataset; vendor prices and terms; India's HS 2028
+  adoption date. Most facts rest on secondary sources and are marked *(unverified)* in the note.
+- **Recommendation, not a decision**: evaluate a hybrid; get vendor quotes; never scrape ICEGATE without written
+  confirmation. Needs the Product Owner's answers to four questions in the note.
