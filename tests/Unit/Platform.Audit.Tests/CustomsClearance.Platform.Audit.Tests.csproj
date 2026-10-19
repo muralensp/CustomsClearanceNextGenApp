@@ -30,7 +30,7 @@
 
   <ItemGroup>
     <!-- coverlet.msbuild only, not coverlet.collector (ADR-0007 Finding 1). -->
-    <PackageReference Include="coverlet.msbuild" Version="6.0.0">
+    <PackageReference Include="coverlet.msbuild" Version="6.0.4">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
