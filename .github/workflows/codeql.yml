@@ -1,0 +1,51 @@
+name: CodeQL
+
+# Day 43 (ADR-0038): SAST via GitHub CodeQL for C# (free for public repos).
+# Complements SonarAnalyzer.CSharp (ADR-0007), which runs at build time.
+#
+# LOCKSTEP EXCEPTION (ADR-0005): CodeQL has no Azure Pipelines equivalent in
+# build/azure-pipelines.yml - it is a GitHub-hosted service. On migration to
+# Azure DevOps this workflow is retired and replaced by GitHub Advanced
+# Security for Azure DevOps or another SAST tool. Recorded in ADR-0038.
+#
+# Not part of the "CI passed" aggregate (that job lives in ci.yml and can
+# only depend on jobs in the same workflow). Branch protection therefore
+# requires both "CI passed" and "Analyze (csharp)" - docs/BRANCH-PROTECTION.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 3 * * 1'   # weekly, catches newly published queries on an idle repo
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # upload results to the Security tab
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [csharp]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none          # C# supports buildless extraction; no dotnet build needed
+          queries: security-extended
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

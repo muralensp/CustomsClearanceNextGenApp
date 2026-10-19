@@ -1,0 +1,5 @@
+# Time-boxed exceptions for build/scripts/dependency-scan.sh (ADR-0038).
+# Only High/Critical advisories need an entry; Moderate/Low just warn.
+# Format:  GHSA-xxxx-xxxx-xxxx | YYYY-MM-DD expiry | reason (why it is not exploitable / when it will be fixed)
+# An expired entry stops applying and the scan fails again - renew deliberately or fix the package.
+# Currently empty: the High advisories found on Day 43 were fixed (tests/Directory.Build.props), not excepted.

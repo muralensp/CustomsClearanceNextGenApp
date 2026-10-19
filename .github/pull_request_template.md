@@ -38,4 +38,5 @@ Full checklists (formalized Day 15 — see `docs/quality-gates/`): [Gate 1 Archi
 - [ ] Logging added where appropriate
 - [ ] Audit events added where appropriate (per PRD audit requirements)
 - [ ] Tests passing
+- [ ] `CI passed` and `Analyze (csharp)` checks are green (dependency scan, secret scan, coverage, lint included) - not merged over a red check
 - [ ] Decision Trace verified (if a Rules Engine change, per ADR-0002)

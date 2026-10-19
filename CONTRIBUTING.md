@@ -4,7 +4,7 @@ This project is developed solo (one human, one AI pairing partner). This guide s
 
 ## Branching
 
-- `main` is always deployable and protected. No direct commits.
+- `main` is meant to be always deployable and protected, with no direct commits. **Interim state (Day 43): the CI gates exist, but GitHub branch protection is NOT yet enabled**, so GitHub does not currently stop a direct push to `main` or a merge with a red check; until the Product Owner enables it (exact command and rationale: [`docs/BRANCH-PROTECTION.md`](docs/BRANCH-PROTECTION.md)), following this rule is on the author. Once enabled, the required checks are `CI passed` and `Analyze (csharp)`.
 - `release/*` branches only when preparing a production release.
 - No long-lived `develop`/`staging` branches.
 
@@ -62,7 +62,7 @@ chore(deps): upgrade EF Core
 
 ## Pull Requests
 
-Every change goes through a PR, including solo PR-to-self — never merge directly to `main`. Use the template in `.github/pull_request_template.md`. This creates a permanent record of design intent, review evidence, and requirement linkage, which matters for this platform's audit/traceability requirements (PRD Ch.6.11, 7.14, 8.14) independent of team size.
+Every change goes through a PR, including solo PR-to-self — never merge directly to `main`. (Today this is a convention rather than something GitHub enforces; see Branching above.) Use the template in `.github/pull_request_template.md`. This creates a permanent record of design intent, review evidence, and requirement linkage, which matters for this platform's audit/traceability requirements (PRD Ch.6.11, 7.14, 8.14) independent of team size.
 
 ## Definition of Done
 
@@ -72,6 +72,7 @@ A feature is complete only when:
 - Unit tests passing, with the project's coverage threshold (`Threshold`/`ThresholdType`/`ThresholdStat` in its own test `.csproj`, per `adr/0007`) declared and enforced: >=95% for core business/rules logic, >=80% for CRUD-heavy master data / shared platform libraries, per the Phase-wise Plan v2 classification
 - Integration tests passing
 - No new SonarAnalyzer.CSharp warnings introduced without a documented reason (build-time static analysis, per `adr/0007` — not currently a hard CI gate, but reviewed)
+- Automated gates green: build, lint (`dotnet format`), unit tests + coverage thresholds, integration tests, container/contract/E2E smoke, dependency scan (no High/Critical advisories), secret scan, CodeQL — all rolled up in the `CI passed` check (`adr/0038`). Run locally before pushing: `bash build/scripts/lint.sh`, `bash build/scripts/test.sh`, `bash build/scripts/dependency-scan.sh`, `bash build/scripts/secret-scan.sh` (the last needs docker)
 - EF Core migration included and reviewed (rollback considered) — not Flyway, per `adr/0001` and `adr/0003`
 - OpenAPI updated (if REST contract changed)
 - AsyncAPI updated (if event contract changed)

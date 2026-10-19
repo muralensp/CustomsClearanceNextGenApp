@@ -14,6 +14,10 @@
 # lockstep with .github/workflows/ci.yml per ADR-0005's discipline requirement.
 # Day 14 adds IntegrationTest and ContractTest stages, likewise kept in lockstep.
 # Day 40 adds the E2ESmokeTest stage (e2e-smoke-test.sh), likewise kept in lockstep.
+# Day 43 adds DependencyScan, SecretScan and the CIPassed aggregate stage (ADR-0038).
+# DELIBERATE LOCKSTEP EXCEPTION: CodeQL (.github/workflows/codeql.yml) has no
+# equivalent here - it is a GitHub-hosted service. On migration, replace it with
+# GitHub Advanced Security for Azure DevOps (or another SAST) - see ADR-0038.
 
 trigger:
   branches:
@@ -143,3 +147,54 @@ stages:
             inputs:
               targetPath: 'TestResults/e2e-evidence.txt'
               artifact: 'e2e-smoke-evidence'
+
+  - stage: DependencyScan
+    jobs:
+      - job: DependencyScan
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              version: '8.0.x'
+          - bash: build/scripts/dependency-scan.sh
+            displayName: 'Dependency vulnerability scan (fails on High/Critical)'
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            inputs:
+              targetPath: 'TestResults/dependency-scan.json'
+              artifact: 'dependency-scan-report'
+
+  - stage: SecretScan
+    jobs:
+      - job: SecretScan
+        steps:
+          - checkout: self
+            fetchDepth: 0          # full history - the scan covers every commit
+          - bash: build/scripts/secret-scan.sh
+            displayName: 'Secret scan (gitleaks, full history)'
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            inputs:
+              targetPath: 'TestResults/gitleaks-report.json'
+              artifact: 'secret-scan-report'
+
+  # Aggregate gate (mirror of the "CI passed" job in ci.yml). With the default
+  # condition (succeeded()) this stage runs only if EVERY listed stage succeeded;
+  # a failed, cancelled or skipped dependency leaves it not-succeeded. Point the
+  # Azure DevOps branch policy / build validation at this pipeline.
+  - stage: CIPassed
+    dependsOn:
+      - Build
+      - Lint
+      - Test
+      - IntegrationTest
+      - Containerize
+      - ContractTest
+      - E2ESmokeTest
+      - DependencyScan
+      - SecretScan
+    jobs:
+      - job: CIPassed
+        steps:
+          - checkout: none
+          - bash: echo "All gating stages succeeded."
+            displayName: 'CI passed'
