@@ -31,7 +31,7 @@
          same project causes conflicting/empty coverage output, verified
          locally during Day 12. msbuild is required for threshold
          enforcement (dotnet test fails the build below threshold). -->
-    <PackageReference Include="coverlet.msbuild" Version="6.0.0" />
+    <PackageReference Include="coverlet.msbuild" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
