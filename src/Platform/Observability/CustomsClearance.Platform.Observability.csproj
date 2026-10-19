@@ -21,6 +21,8 @@
   <ItemGroup>
     <!-- Day 41: moved 1.9.0 -> 1.15.x as one aligned set to clear NU1902 /
          GHSA-4625-4j76-fww9 on the OTLP exporter (ADR-0036). -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
