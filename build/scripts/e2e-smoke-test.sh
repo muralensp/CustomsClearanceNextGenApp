@@ -199,7 +199,10 @@ pass "admin JWT accepted by both the Gateway and the Api on an Admin-only route"
 
 ECHOED="$(grep -i '^x-correlation-id:' "${HEADERS_FILE}" | head -1 | tr -d '\r' | awk '{print $2}')"
 [ "${ECHOED}" = "${E2E_CORR}" ] || fail "Gateway did not echo our correlation ID (sent ${E2E_CORR}, got '${ECHOED}')"
-pass "correlation ID ${E2E_CORR} honoured and echoed end to end"
+# Day 41: exactly one header (it used to come back twice, from the Api and the Gateway).
+ECHO_COUNT="$(grep -ic '^x-correlation-id:' "${HEADERS_FILE}")"
+[ "${ECHO_COUNT}" = "1" ] || fail "Expected exactly one X-Correlation-Id response header, got ${ECHO_COUNT}"
+pass "correlation ID ${E2E_CORR} honoured and echoed end to end (exactly one response header)"
 
 # --- 3. sample service -------------------------------------------------------
 

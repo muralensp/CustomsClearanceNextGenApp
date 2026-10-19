@@ -188,6 +188,20 @@ fi
 
 echo "Audit round-trip verified: config change recorded with old/new value, readable via /api/audit."
 
+echo "== Verifying database-level audit immutability: restricted audit_writer role (Day 41, ADR-0036) =="
+AUDIT_PSQL="docker compose exec -T -e PGPASSWORD=devlocalonly postgres psql -h localhost -U audit_writer -d customsclearance_dev -v ON_ERROR_STOP=1"
+if ! ${AUDIT_PSQL} -tc 'select count(*) from "AuditEvents"' > /dev/null; then
+  echo "audit_writer could not SELECT from AuditEvents."
+  exit 1
+fi
+for FORBIDDEN in 'update "AuditEvents" set "Action" = '"'"'tampered'"'" 'delete from "AuditEvents"' 'truncate "AuditEvents"'; do
+  if ${AUDIT_PSQL} -c "${FORBIDDEN}" > /dev/null 2>&1; then
+    echo "audit_writer was allowed to run: ${FORBIDDEN}"
+    exit 1
+  fi
+done
+echo "Audit immutability verified: audit_writer can SELECT but UPDATE/DELETE/TRUNCATE are refused by the database."
+
 echo "== Verifying seeded reference data (Platform.ReferenceData, Day 39) =="
 for LOOKUP in "countries/IN:India" "currencies/INR:Indian Rupee" "units/KGS:Kilograms"; do
   LOOKUP_PATH="${LOOKUP%%:*}"

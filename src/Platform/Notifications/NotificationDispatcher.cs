@@ -59,8 +59,21 @@ public sealed class NotificationDispatcher
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _logger.LogWarning(ex, "Notification channel {Channel} failed for notification {NotificationId}", channel.Name, notification.Id);
-                outcome = new ChannelOutcome(DeliveryStatus.Failed, ex.Message);
+                // Day 41 (ADR-0036): SMTP errors can echo the recipient address in
+                // their message. The address is personal data (DPDPA 2023), so it is
+                // redacted before the message is logged or stored on the delivery
+                // row (which the Admin API returns). The exception object itself is
+                // not passed to the logger for the same reason; its type is.
+                var safeError = RedactAddress(ex.Message, message.EmailAddress);
+#pragma warning disable S6667 // deliberate: the exception object (message + inner exceptions) may echo the address, see above
+                _logger.LogWarning(
+                    "Notification channel {Channel} failed for notification {NotificationId}: {ExceptionType}: {Error}",
+                    channel.Name,
+                    notification.Id,
+                    ex.GetType().Name,
+                    safeError);
+#pragma warning restore S6667
+                outcome = new ChannelOutcome(DeliveryStatus.Failed, safeError);
             }
 
             notification.Deliveries.Add(new NotificationDelivery
@@ -84,4 +97,9 @@ public sealed class NotificationDispatcher
 
         return notification;
     }
+
+    internal static string RedactAddress(string text, string? emailAddress) =>
+        string.IsNullOrWhiteSpace(emailAddress)
+            ? text
+            : text.Replace(emailAddress, "[redacted-email]", StringComparison.OrdinalIgnoreCase);
 }

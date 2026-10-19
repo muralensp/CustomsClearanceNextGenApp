@@ -62,6 +62,37 @@ public class CorrelationIdMiddlewareTests
     }
 
     [Fact]
+    public async Task WhenDownstreamAlsoAddsTheHeader_ResponseStillCarriesExactlyOneValue()
+    {
+        // Simulates what YARP does behind the Gateway: it appends the proxied
+        // service's own X-Correlation-Id response header. Day 41 fix: the client
+        // must still see the header once.
+        using var host = await new HostBuilder()
+            .ConfigureWebHost(webBuilder =>
+            {
+                webBuilder.UseTestServer();
+                webBuilder.Configure(app =>
+                {
+                    app.UseCustomsClearanceCorrelationId();
+                    app.Run(async context =>
+                    {
+                        context.Response.Headers.Append(CorrelationIdMiddleware.HeaderName, "test-corr-dup");
+                        await context.Response.WriteAsync("ok");
+                    });
+                });
+            })
+            .StartAsync();
+
+        var client = host.GetTestClient();
+        client.DefaultRequestHeaders.Add(CorrelationIdMiddleware.HeaderName, "test-corr-dup");
+
+        var response = await client.GetAsync("/");
+
+        Assert.True(response.Headers.TryGetValues(CorrelationIdMiddleware.HeaderName, out var values));
+        Assert.Equal(new[] { "test-corr-dup" }, values);
+    }
+
+    [Fact]
     public async Task WhenRequestOmitsCorrelationId_GeneratesOne()
     {
         var (statusCode, responseHeader, _) = await InvokeAsync(null);

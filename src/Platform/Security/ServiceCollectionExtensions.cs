@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 
 namespace CustomsClearance.Platform.Security;
@@ -13,8 +14,15 @@ public static class ServiceCollectionExtensions
     /// Registers JWT Bearer authentication using symmetric-key validation
     /// bound from the "Jwt" configuration section (see JwtOptions for the
     /// local/Development vs. future Authority-based migration note).
+    /// Day 41: outside the Development environment, startup fails fast when
+    /// the signing key is the committed placeholder or too short
+    /// (JwtKeyValidator). Passing no environment is treated as "not
+    /// Development" - the safe default.
     /// </summary>
-    public static IServiceCollection AddCustomsClearanceAuthentication(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddCustomsClearanceAuthentication(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment? environment = null)
     {
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 
@@ -25,6 +33,8 @@ public static class ServiceCollectionExtensions
                 "See appsettings.Development.json for the local/dev placeholder, " +
                 "or adr/0011 for the production secrets-management approach.");
         }
+
+        JwtKeyValidator.EnsureAcceptable(jwtOptions, environment);
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -55,7 +65,10 @@ public static class ServiceCollectionExtensions
     /// (e.g. once real Authority-based validation replaces the symmetric
     /// key, per JwtOptions' doc comment) would not call this.
     /// </summary>
-    public static IServiceCollection AddCustomsClearanceTokenIssuance(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddCustomsClearanceTokenIssuance(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment? environment = null)
     {
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 
@@ -66,6 +79,8 @@ public static class ServiceCollectionExtensions
                 "See appsettings.Development.json for the local/dev placeholder, " +
                 "or adr/0011 for the production secrets-management approach.");
         }
+
+        JwtKeyValidator.EnsureAcceptable(jwtOptions, environment);
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();

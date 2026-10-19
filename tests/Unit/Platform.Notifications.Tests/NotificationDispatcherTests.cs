@@ -109,6 +109,22 @@ public class NotificationDispatcherTests
     }
 
     [Fact]
+    public async Task EmailFailure_ThatEchoesTheAddress_StoresARedactedError()
+    {
+        // Day 41: the recipient address is personal data; an SMTP error that echoes
+        // it must not end up on the delivery row (returned by the Admin API).
+        using var db = TestHost.NewDb(nameof(EmailFailure_ThatEchoesTheAddress_StoresARedactedError));
+        var email = new FakeEmailSender { ThrowOnSend = new InvalidOperationException("Mailbox Broker@Example.com unavailable") };
+        var dispatcher = TestHost.NewDispatcher(db, email);
+
+        await dispatcher.DispatchAsync(Message("broker@example.com"), sourceEventId: null);
+
+        var saved = await db.Notifications.Include(n => n.Deliveries).SingleAsync();
+        var error = saved.Deliveries.Single(d => d.Channel == "Email").Error;
+        Assert.Equal("Mailbox [redacted-email] unavailable", error);
+    }
+
+    [Fact]
     public async Task OneFailingChannel_DoesNotStopOtherChannels()
     {
         using var db = TestHost.NewDb(nameof(OneFailingChannel_DoesNotStopOtherChannels));

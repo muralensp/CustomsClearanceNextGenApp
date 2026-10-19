@@ -42,9 +42,9 @@ builder.Services.AddSwaggerGen();
 // integer value - string enum binding is required, not optional.
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
-builder.Services.AddCustomsClearanceAuthentication(builder.Configuration);
+builder.Services.AddCustomsClearanceAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddCustomsClearanceAuthorization();
-builder.Services.AddCustomsClearanceTokenIssuance(builder.Configuration);
+builder.Services.AddCustomsClearanceTokenIssuance(builder.Configuration, builder.Environment);
 builder.Services.AddCustomsClearanceAudit();
 builder.Services.AddCustomsClearanceMetrics("CustomsClearance.Api");
 

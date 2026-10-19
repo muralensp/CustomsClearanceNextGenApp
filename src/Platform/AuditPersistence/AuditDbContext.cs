@@ -6,10 +6,9 @@ namespace CustomsClearance.Platform.Audit.Persistence;
 /// Append-only audit store (adr/0004: "A single AuditEvent model,
 /// append-only"). Immutability is enforced at the application level here:
 /// any attempt to update or delete a stored row throws before it reaches the
-/// database. Database-level enforcement (revoked UPDATE/DELETE grants or
-/// triggers) is provider-specific and is deferred to Day 41 Security
-/// Hardening (see ADR-0032) - until then, anyone with direct database
-/// access can still alter rows.
+/// database. Database-level enforcement (Day 41, ADR-0036) is a restricted
+/// runtime role granted only INSERT and SELECT - see AuditStoreGrants. The
+/// table owner / a superuser can still alter rows.
 ///
 /// Deliberately a plain DbContext, not PlatformDbContext: that base stamps
 /// UpdatedAt on modification, which an append-only table must never have.

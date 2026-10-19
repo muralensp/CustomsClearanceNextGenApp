@@ -38,7 +38,7 @@ builder.Logging.AddCustomsClearanceStructuredLogging();
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
-builder.Services.AddCustomsClearanceAuthentication(builder.Configuration);
+builder.Services.AddCustomsClearanceAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddCustomsClearanceAuthorization();
 builder.Services.AddCustomsClearanceMetrics("CustomsClearance.Gateway");
 

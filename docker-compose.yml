@@ -79,6 +79,9 @@ services:
       - "${GATEWAY_PORT:-8080}:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      # Day 41: signing key can be supplied via JWT_KEY; the default is the public dev placeholder,
+      # which JwtKeyValidator rejects in any non-Development environment (ADR-0036).
+      - Jwt__Key=${JWT_KEY:-LOCAL-DEV-ONLY-PLACEHOLDER-KEY-NEVER-USE-IN-PRODUCTION-32B}
       - ReverseProxy__Clusters__api-cluster__Destinations__api-destination__Address=http://api:8080/
       - Otlp__Endpoint=http://tempo:4317
     depends_on:
@@ -92,12 +95,17 @@ services:
     image: ${IMAGE_PREFIX:-customsclearance}-api:dev
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__Key=${JWT_KEY:-LOCAL-DEV-ONLY-PLACEHOLDER-KEY-NEVER-USE-IN-PRODUCTION-32B}
       - ConnectionStrings__DiagnosticsDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__IdentityDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__RulesDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__ConfigDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__NotificationsDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
-      - ConnectionStrings__AuditDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
+      # Day 41: the runtime audit connection is a RESTRICTED role (INSERT+SELECT only on the audit
+      # table). AuditAdminDb is the owner connection used only by the Development schema bootstrap
+      # that creates the table, the role and the grants (ADR-0036). Both are dev-only credentials.
+      - ConnectionStrings__AuditDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=audit_writer;Password=devlocalonly
+      - ConnectionStrings__AuditAdminDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - ConnectionStrings__ReferenceDataDb=Host=postgres;Port=5432;Database=customsclearance_dev;Username=customsclearance;Password=devlocalonly
       - Email__Host=mailpit
       - Email__Port=1025
