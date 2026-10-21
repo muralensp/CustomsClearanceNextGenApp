@@ -231,7 +231,7 @@ services:
       - "${PROMETHEUS_PORT:-9090}:9090"
 
   tempo:
-    image: grafana/tempo:2.5.0
+    image: grafana/tempo:3.1.0
     command: -config.file=/etc/tempo/tempo.yaml
     volumes:
       - ./observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
