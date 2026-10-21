@@ -1,3 +1,4 @@
+using CustomsClearance.Platform.Audit;
 using CustomsClearance.Platform.ErrorHandling;
 using CustomsClearance.Platform.RulesEngine;
 using CustomsClearance.Platform.Security;
@@ -38,7 +39,7 @@ public static class RuleAdminEndpoints
         return app;
     }
 
-    private static async Task<IResult> CreateRuleAsync(CreateRuleRequest request, RulesDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task<IResult> CreateRuleAsync(CreateRuleRequest request, HttpContext http, RulesDbContext dbContext, IAuditWriter auditWriter, CancellationToken cancellationToken)
     {
         ValidateEffectiveWindow(request.EffectiveFrom, request.EffectiveTo);
         ValidateConditions(request.Conditions);
@@ -82,6 +83,15 @@ public static class RuleAdminEndpoints
         dbContext.RuleConditions.AddRange(conditions);
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        await RuleAudit.WriteAsync(auditWriter, http, "RuleCreated", rule.Id,
+        [
+            new FieldChange(nameof(Rule.RuleCode), null, rule.RuleCode),
+            new FieldChange(nameof(Rule.Name), null, rule.Name),
+            new FieldChange(nameof(Rule.Category), null, rule.Category.ToString()),
+            new FieldChange(nameof(Rule.Priority), null, rule.Priority.ToString()),
+            .. RuleAudit.VersionChanges(version, conditions),
+        ], cancellationToken);
+
         return Results.Created($"/api/rules/{rule.Id}", await LoadDetailAsync(dbContext, rule.Id, cancellationToken));
     }
 
@@ -100,7 +110,7 @@ public static class RuleAdminEndpoints
         return detail is null ? Results.NotFound() : Results.Ok(detail);
     }
 
-    private static async Task<IResult> UpdateRuleAsync(Guid id, UpdateRuleRequest request, RulesDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task<IResult> UpdateRuleAsync(Guid id, UpdateRuleRequest request, HttpContext http, RulesDbContext dbContext, IAuditWriter auditWriter, CancellationToken cancellationToken)
     {
         var rule = await dbContext.Rules.FindAsync([id], cancellationToken);
         if (rule is null)
@@ -111,15 +121,38 @@ public static class RuleAdminEndpoints
         // Only the Rule's own mutable fields - RuleCode/Category are
         // identity (never editable); conditions/outcome are RuleVersion's
         // concern, changed only via AddRuleVersionAsync.
+        var (oldName, oldDescription, oldPriority) = (rule.Name, rule.Description, rule.Priority);
         rule.Name = request.Name;
         rule.Description = request.Description;
         rule.Priority = request.Priority;
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        // Only genuine changes are audited, as for config updates.
+        var changes = new List<FieldChange>();
+        if (oldName != rule.Name)
+        {
+            changes.Add(new FieldChange(nameof(Rule.Name), oldName, rule.Name));
+        }
+
+        if (oldDescription != rule.Description)
+        {
+            changes.Add(new FieldChange(nameof(Rule.Description), oldDescription, rule.Description));
+        }
+
+        if (oldPriority != rule.Priority)
+        {
+            changes.Add(new FieldChange(nameof(Rule.Priority), oldPriority.ToString(), rule.Priority.ToString()));
+        }
+
+        if (changes.Count > 0)
+        {
+            await RuleAudit.WriteAsync(auditWriter, http, "RuleUpdated", rule.Id, changes, cancellationToken);
+        }
+
         return Results.Ok(await LoadDetailAsync(dbContext, id, cancellationToken));
     }
 
-    private static async Task<IResult> DeactivateRuleAsync(Guid id, RulesDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task<IResult> DeactivateRuleAsync(Guid id, HttpContext http, RulesDbContext dbContext, IAuditWriter auditWriter, CancellationToken cancellationToken)
     {
         var rule = await dbContext.Rules.FindAsync([id], cancellationToken);
         if (rule is null)
@@ -130,13 +163,20 @@ public static class RuleAdminEndpoints
         // Soft-deactivation only, per ADR-0025 - a Rule is never hard-
         // deleted, since past DecisionTrace rows still reference
         // RuleVersions authored under it.
+        var wasActive = rule.Active;
         rule.Active = false;
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        if (wasActive)
+        {
+            await RuleAudit.WriteAsync(auditWriter, http, "RuleDeactivated", rule.Id,
+                [new FieldChange(nameof(Rule.Active), bool.TrueString, bool.FalseString)], cancellationToken);
+        }
 
         return Results.Ok(await LoadDetailAsync(dbContext, id, cancellationToken));
     }
 
-    private static async Task<IResult> AddRuleVersionAsync(Guid id, AddRuleVersionRequest request, RulesDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task<IResult> AddRuleVersionAsync(Guid id, AddRuleVersionRequest request, HttpContext http, RulesDbContext dbContext, IAuditWriter auditWriter, CancellationToken cancellationToken)
     {
         var rule = await dbContext.Rules
             .Include(r => r.Versions)
@@ -164,8 +204,11 @@ public static class RuleAdminEndpoints
                 nameof(request.EffectiveFrom));
         }
 
+        var changes = new List<FieldChange>();
         if (validation.VersionToSupersede is { } superseded)
         {
+            changes.Add(new FieldChange($"Version{superseded.VersionNumber}.EffectiveTo", superseded.EffectiveTo?.ToString("yyyy-MM-dd"), request.EffectiveFrom.AddDays(-1).ToString("yyyy-MM-dd")));
+
             // This does not rewrite history. Past evaluations used a date
             // inside the old version's now-closed window, so they remain
             // unaffected. DecisionTrace rows already recorded still
@@ -198,6 +241,9 @@ public static class RuleAdminEndpoints
         dbContext.RuleVersions.Add(version);
         dbContext.RuleConditions.AddRange(conditions);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        changes.AddRange(RuleAudit.VersionChanges(version, conditions));
+        await RuleAudit.WriteAsync(auditWriter, http, "RuleVersionAdded", rule.Id, changes, cancellationToken);
 
         return Results.Created($"/api/rules/{rule.Id}", await LoadDetailAsync(dbContext, rule.Id, cancellationToken));
     }

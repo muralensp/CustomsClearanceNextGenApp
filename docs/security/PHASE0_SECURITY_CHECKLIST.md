@@ -69,7 +69,7 @@ real compose stack (slot 1) on 2026-10-18/19.
 | 5.4 | Dev fallback without `AuditAdminDb` | ACCEPTED-GAP | If `ConnectionStrings:AuditAdminDb` is absent in Development, the table is bootstrapped over the runtime connection and no grants apply; a warning is logged. Non-Development hosts do no bootstrap at all (so table, role and grants must be provisioned by IaC/DBA). |
 | 5.5 | Audit and change not atomic | ACCEPTED-GAP | Unchanged from ADR-0032 (sequential commits). |
 | 5.6 | Retention (5 years) and monthly partitioning | OPEN | Not implemented; retention duration still needs product-owner confirmation (Day 10 item 18). |
-| 5.7 | Every audit-worthy action audited | ACCEPTED-GAP | Only config changes and `/diagnostics/secure`; rules admin (Day 34) writes no audit events. Gate 2 item for each new mutation. |
+| 5.7 | Every audit-worthy action audited | ACCEPTED-GAP | Config changes, rules admin mutations (create/update/deactivate/add version, closed 2026-10-20, E2E-proven) and `/diagnostics/secure`. Gate 2 item for each new mutation. |
 | 5.8 | Authorization decisions on Confidential+ fields audited | OPEN | No Confidential fields yet. |
 | 5.9 | Correlation ID on audit rows | PASS | E2E check 15 (live): audit row carries the request's correlation ID. |
 
