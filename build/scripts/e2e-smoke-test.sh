@@ -278,6 +278,21 @@ expect_contains '"occurredAt"' "Audit record should carry a timestamp"
 pass "audit trail: ConfigCreated + ConfigUpdated, old 5000 / new 10000, by admin ${ADMIN_USER_ID}, correlation ID ${E2E_CORR}"
 evidence config_entry_id "${CONFIG_ID}"
 
+# Rules admin mutations are BusinessAudit too (Day 47 exception, closed in the Phase 0 follow-ups).
+req PUT "/api/rules/${RULE_ID}" '{"name":"E2E de minimis","description":"Day 40 end-to-end rule","priority":2}'
+expect_code 200 "Change the rule's priority"
+req POST "/api/rules/${RULE_ID}/deactivate"
+expect_code 200 "Deactivate the rule"
+
+req GET "/api/audit?entityId=${RULE_ID}"
+expect_code 200 "Read the rule's audit trail"
+expect_contains '"total":3' "Rule audit trail should hold create, update and deactivate"
+expect_contains '"action":"RuleCreated"' "Rule creation should be audited"
+expect_contains '"action":"RuleUpdated"' "Rule update should be audited"
+expect_contains '"action":"RuleDeactivated"' "Rule deactivation should be audited"
+expect_contains "\"performedBy\":\"${ADMIN_USER_ID}\"" "Rule audit record should name the admin user"
+pass "rules audit trail: RuleCreated + RuleUpdated + RuleDeactivated by admin ${ADMIN_USER_ID}"
+
 # --- 6. notification ---------------------------------------------------------
 
 section "6. NOTIFICATION: event -> RabbitMQ -> in-app record + SMTP email (ADR-0018/0031)"

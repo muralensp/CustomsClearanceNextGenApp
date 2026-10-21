@@ -14,14 +14,32 @@
 # ubuntu-latest runners by default, no separate setup step needed.
 set -euo pipefail
 
-echo "== Building and starting dev environment (docker compose) =="
-docker compose up -d --build
-
+# Registered before `up` so a failed `up` still tears the stack down.
 cleanup() {
   echo "== Tearing down dev environment =="
   docker compose down -v
 }
 trap cleanup EXIT
+
+# RabbitMQ first-boot race (ADR-0028): `restart: on-failure` heals the container, but
+# `up` fails fast while it restarts. A second `up` succeeds, so retry as smoke-test.sh does.
+echo "== Building and starting dev environment (docker compose) =="
+UP_MAX_ATTEMPTS=3
+UP_SUCCEEDED=false
+for attempt in $(seq 1 $UP_MAX_ATTEMPTS); do
+  if docker compose up -d --build; then
+    UP_SUCCEEDED=true
+    break
+  fi
+  echo "docker compose up attempt ${attempt}/${UP_MAX_ATTEMPTS} failed (likely the rabbitmq first-boot race), retrying in 5s..."
+  sleep 5
+done
+
+if [ "$UP_SUCCEEDED" != "true" ]; then
+  echo "docker compose up did not succeed after ${UP_MAX_ATTEMPTS} attempts."
+  docker compose logs
+  exit 1
+fi
 
 echo "== Waiting for Api health check =="
 MAX_ATTEMPTS=20

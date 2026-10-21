@@ -40,6 +40,13 @@ set -uo pipefail
 GATEWAY_URL="http://localhost:${GATEWAY_PORT:-8080}"
 MAILPIT_URL="http://localhost:${MAILPIT_UI_PORT:-8025}"
 
+# Registered before `up` so a failed `up` still tears the stack down.
+cleanup() {
+  echo "== Tearing down dev environment =="
+  docker compose down -v
+}
+trap cleanup EXIT
+
 echo "== Building and starting dev environment (docker compose) =="
 UP_MAX_ATTEMPTS=3
 UP_SUCCEEDED=false
@@ -59,12 +66,6 @@ if [ "$UP_SUCCEEDED" != "true" ]; then
 fi
 
 set -e
-
-cleanup() {
-  echo "== Tearing down dev environment =="
-  docker compose down -v
-}
-trap cleanup EXIT
 
 echo "== Waiting for Api health check =="
 MAX_ATTEMPTS=20

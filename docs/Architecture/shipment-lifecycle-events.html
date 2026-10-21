@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0;font-size:14px}</style>
+<title>Shipment Lifecycle Events</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a swimlane timeline. Time runs left to right in nine phases, one lane per bounded context. */
+:root {
+  --bg: #f1f4f7;
+  --ink: #17212c;
+  --muted: #566475;
+  --head: #dde5ec;
+  --lane-a: #e7ecf1;
+  --lane-b: #f1f4f7;
+  --rule: #c9d3dd;
+  --ev: #f5a83c;
+  --ev-ink: #2b1a02;
+  --alt-stroke: #bd7410;
+  --async: #3a4757;
+  --sync: #1f6fc2;
+  --retrig: #b8432b;
+  --gate: #17212c;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10161c; --ink: #e7ecf2; --muted: #9aa8b8; --head: #1d2833;
+    --lane-a: #17202a; --lane-b: #10161c; --rule: #2a3745;
+    --ev: #d9902f; --ev-ink: #1a1100; --alt-stroke: #e0a24a;
+    --async: #9fb0c2; --sync: #6db3f2; --retrig: #f08a6f; --gate: #e7ecf2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10161c; --ink: #e7ecf2; --muted: #9aa8b8; --head: #1d2833;
+  --lane-a: #17202a; --lane-b: #10161c; --rule: #2a3745;
+  --ev: #d9902f; --ev-ink: #1a1100; --alt-stroke: #e0a24a;
+  --async: #9fb0c2; --sync: #6db3f2; --retrig: #f08a6f; --gate: #e7ecf2;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: 1.5;
+  padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+h1 { font-size: 1.7rem; font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 68ch; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); }
+svg { display: block; width: 100%; min-width: 1500px; max-width: 1770px; height: auto; }
+figcaption { color: var(--muted); font-size: 0.88rem; max-width: 80ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 0.85rem; color: var(--muted); align-items: center; }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend svg { min-width: 0; width: 44px; height: 16px; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; }
+.notes > div { min-width: 0; }
+h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; margin: 0 0 6px; }
+.notes p, .notes li { margin: 0 0 6px; font-size: 0.92rem; }
+.notes ul { margin: 0; padding-left: 1.1em; }
+.src { color: var(--muted); font-size: 0.82rem; margin: 0; }
+
+/* diagram parts */
+.lane-a { fill: var(--lane-a); }
+.lane-b { fill: var(--lane-b); }
+.head { fill: var(--head); }
+.rule { stroke: var(--rule); stroke-width: 1; fill: none; }
+.col-rule { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 2 4; }
+.phase { font: 600 12px var(--font-body); fill: var(--ink); }
+.lane-label { font: 500 12px var(--font-body); fill: var(--ink); }
+.ev { fill: var(--ev); stroke: none; }
+.ev-text { font: 500 11px var(--font-mono); fill: var(--ev-ink); text-anchor: middle; }
+.alt { fill: var(--ev); fill-opacity: 0.2; stroke: var(--alt-stroke); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.alt-text { font: 500 11px var(--font-mono); fill: var(--ink); text-anchor: middle; }
+.ln { fill: none; stroke-width: 1.6; }
+.ln-a { stroke: var(--async); }
+.ln-s { stroke: var(--sync); stroke-dasharray: 6 4; }
+.ln-r { stroke: var(--retrig); stroke-width: 2; }
+.ln-g { stroke: var(--gate); stroke-width: 2.2; }
+.mk-a { fill: var(--async); }
+.mk-s { fill: var(--sync); }
+.mk-r { fill: var(--retrig); }
+.mk-g { fill: var(--gate); }
+.dot { fill: var(--gate); }
+.lab { font: 400 10.5px var(--font-body); fill: var(--muted); }
+.lab-s { font: 500 10.5px var(--font-body); fill: var(--sync); }
+.lab-r { font: 500 10.5px var(--font-body); fill: var(--retrig); }
+.lab-g { font: 600 10.5px var(--font-body); fill: var(--ink); }
+.band-note { font: 400 11.5px var(--font-body); fill: var(--muted); }
+</style>
+
+</head>
+<body>
+<main>
+  <header>
+    <h1>Shipment lifecycle events</h1>
+    <p class="lede">How a shipment moves from ingestion to customs clearance, as the domain events each bounded context publishes, in time order.</p>
+  </header>
+
+  <figure>
+    <div class="scroll"><svg id="diagram" role="img" aria-label="Swimlane timeline of shipment domain events across nine phases and ten bounded contexts, ending in customs clearance."></svg></div>
+    <figcaption>Columns are phases in order, rows are the bounded context that publishes each event. Four checks (charges, permits, compliance, manifest) must all pass at the gate before a declaration can be submitted.</figcaption>
+  </figure>
+
+  <div class="legend" aria-label="Legend">
+    <span><svg viewBox="0 0 44 16"><rect x="2" y="2" width="40" height="12" rx="3" class="ev"/></svg>Domain event</span>
+    <span><svg viewBox="0 0 44 16"><rect x="2" y="2" width="40" height="12" rx="3" class="alt"/></svg>Optional, or trigger not named in the catalog</span>
+    <span><svg viewBox="0 0 44 16"><path d="M2 8H42" class="ln ln-a"/></svg>Asynchronous event</span>
+    <span><svg viewBox="0 0 44 16"><path d="M2 8H42" class="ln ln-s"/></svg>Synchronous check or call</span>
+    <span><svg viewBox="0 0 44 16"><path d="M2 8H42" class="ln ln-r"/></svg>Re-trigger</span>
+  </div>
+
+  <section class="notes">
+    <div>
+      <h2>Synchronous on purpose</h2>
+      <ul>
+        <li>Permits approved, compliance current and manifest valid are checked at submission time, never from a stale event.</li>
+        <li>The ICEGATE transmission is a direct call, so the submission timestamp is recorded reliably.</li>
+        <li>The customs response then returns asynchronously.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Loops back</h2>
+      <p>Each time a leg arrives, the Segregation Engine re-evaluates the shipment, so the flow is not strictly linear.</p>
+    </div>
+    <div>
+      <h2>Not shown</h2>
+      <ul>
+        <li>Document Management (<code>DocumentAttached</code>) and Reporting, which only subscribe.</li>
+        <li>Courier shipments, delivery and payment, which the catalog does not cover.</li>
+        <li>The event that adds commodity lines, which the catalog does not name.</li>
+      </ul>
+    </div>
+  </section>
+
+  <p class="src">Source: Day 5 Context Map and Domain Event Catalog v1.1, sections 2 to 4. This is design only; none of these business events exist in code yet.</p>
+</main>
+
+<script>
+(function () {
+  var L = 150, CW = 180, BW = 150, BH = 32, MG = 15, HH = 50, LH = 88, NC = 9, NL = 10;
+  var W = L + NC * CW, H = HH + NL * LH;
+
+  var phases = ['Ingest', 'Segregate', 'Declare', 'Classify', 'Fan-out', 'Checks', 'Gate', 'Submit', 'Respond'];
+  var lanes = ['Shipment Management', 'Segregation Engine', 'Declaration Mgmt', 'Commodity / HS Engine',
+    'Duty & Tax Engine', 'Permit Management', 'Compliance Engine', 'Manifest Management',
+    'Customs Gateway', 'Workflow Engine'];
+
+  // id, column, lane, slot, name, kind (ev = event, alt = optional)
+  var E = [
+    ['sc', 0, 0, 'a', 'ShipmentCreated', 'ev'], ['sv', 0, 0, 'b', 'ShipmentValidated', 'ev'],
+    ['sf', 1, 0, 'a', 'ShipmentValidationFailed', 'alt'], ['jc', 1, 0, 'b', 'JourneyCreated', 'alt'],
+    ['si', 2, 0, 'a', 'ShipmentIndicatorAdded', 'alt'],
+    ['ld', 3, 0, 'a', 'LegDeparted', 'ev'], ['la', 4, 0, 'a', 'LegArrived', 'ev'], ['clc', 5, 0, 'a', 'CurrentLegChanged', 'ev'],
+    ['cta', 1, 1, 'a', 'ClearanceTypeAssigned', 'ev'], ['mo', 2, 1, 'b', 'ManualOverrideApplied', 'alt'],
+    ['rs', 4, 1, 'a', 'ReSegregationTriggered', 'ev'],
+    ['dc', 2, 2, 'a', 'DeclarationCreated', 'ev'], ['dv', 3, 2, 'b', 'DeclarationVersionCreated', 'alt'],
+    ['rd', 6, 2, 'a', 'DeclarationReadyForSubmission', 'ev'], ['ds', 7, 2, 'a', 'DeclarationSubmitted', 'ev'],
+    ['dam', 8, 2, 'a', 'DeclarationAmended', 'alt'], ['dca', 8, 2, 'b', 'DeclarationCancelled', 'alt'],
+    ['cc', 3, 3, 'a', 'CommodityCreated', 'ev'], ['ccl', 3, 3, 'b', 'CommodityClassified', 'ev'],
+    ['cs', 4, 3, 'a', 'CommoditySplit', 'alt'], ['cv', 4, 3, 'b', 'CommodityVersionCreated', 'alt'],
+    ['chc', 4, 4, 'a', 'ChargesCalculated', 'ev'], ['chr', 4, 4, 'b', 'ChargesRecalculated', 'alt'],
+    ['pr', 4, 5, 'a', 'PermitRequired', 'ev'], ['ps', 4, 5, 'b', 'PermitStatusChanged', 'ev'],
+    ['cf', 4, 6, 'a', 'ComplianceFlagRaised', 'alt'], ['cok', 4, 6, 'b', 'ComplianceClearedForSubmission', 'ev'],
+    ['mf', 4, 7, 'a', 'ManifestFiled', 'ev'], ['ma', 4, 7, 'b', 'ManifestAmended', 'alt'],
+    ['crr', 8, 8, 'a', 'CustomsResponseReceived', 'ev'], ['cg', 8, 8, 'b', 'ClearanceGranted', 'ev'],
+    ['bt', 5, 9, 'a', 'BrokerTaskCreated', 'ev'], ['st', 6, 9, 'a', 'StatusTransitioned', 'ev']
+  ];
+
+  var byId = {};
+  function x0(c) { return L + c * CW; }
+  function laneTop(l) { return HH + l * LH; }
+  E.forEach(function (e) {
+    var o = { id: e[0], col: e[1], lane: e[2], slot: e[3], name: e[4], kind: e[5] };
+    o.x = x0(o.col) + MG;
+    o.y = laneTop(o.lane) + (o.slot === 'a' ? 6 : 50);
+    o.cy = o.y + BH / 2;
+    o.cx = o.x + BW / 2;
+    byId[o.id] = o;
+  });
+
+  function split(name) {
+    if (name.length <= 20) return [name];
+    var best = -1, bd = 1e9, i;
+    for (i = 1; i < name.length; i++) {
+      if (/[A-Z]/.test(name[i]) && /[a-z]/.test(name[i - 1])) {
+        var d = Math.abs(i - name.length / 2);
+        if (d < bd) { bd = d; best = i; }
+      }
+    }
+    return [name.slice(0, best), name.slice(best)];
+  }
+
+  var out = [];
+  out.push('<defs>' + ['a', 's', 'r', 'g'].map(function (k) {
+    return '<marker id="mk-' + k + '" viewBox="0 0 10 10" markerWidth="9" markerHeight="9" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0L10 5L0 10z" class="mk-' + k + '"/></marker>';
+  }).join('') + '</defs>');
+  out.push('<svg-viewbox-placeholder/>');
+
+  // lanes
+  var i;
+  for (i = 0; i < NL; i++) {
+    out.push('<rect x="0" y="' + laneTop(i) + '" width="' + W + '" height="' + LH + '" class="' + (i % 2 ? 'lane-b' : 'lane-a') + '"/>');
+    out.push('<line x1="0" x2="' + W + '" y1="' + laneTop(i) + '" y2="' + laneTop(i) + '" class="rule"/>');
+  }
+  out.push('<line x1="0" x2="' + W + '" y1="' + H + '" y2="' + H + '" class="rule"/>');
+  // header and lane labels
+  out.push('<rect x="0" y="0" width="' + W + '" height="' + HH + '" class="head"/>');
+  out.push('<rect x="0" y="' + HH + '" width="' + L + '" height="' + (H - HH) + '" class="head" fill-opacity="0.55"/>');
+  for (i = 0; i < NL; i++) {
+    out.push('<text x="12" y="' + (laneTop(i) + LH / 2 + 4) + '" class="lane-label">' + lanes[i].replace('&', '&amp;') + '</text>');
+  }
+  for (i = 0; i < NC; i++) {
+    out.push('<text x="' + (x0(i) + CW / 2) + '" y="' + (HH / 2 + 4) + '" text-anchor="middle" class="phase">' + (i + 1) + '  ' + phases[i] + '</text>');
+  }
+  for (i = 0; i <= NC; i++) {
+    out.push('<line x1="' + x0(i) + '" x2="' + x0(i) + '" y1="0" y2="' + H + '" class="' + (i === 0 ? 'rule' : 'col-rule') + '"/>');
+  }
+
+  // workflow band note
+  out.push('<text x="' + (x0(0) + MG) + '" y="' + (laneTop(9) + 40) + '" class="band-note">Subscribes to status-changing events from every lane above,</text>');
+  out.push('<text x="' + (x0(0) + MG) + '" y="' + (laneTop(9) + 56) + '" class="band-note">then raises tasks and escalations for brokers.</text>');
+
+  // links
+  var gateX = x0(6);
+  function path(d, cls, mk) {
+    out.push('<path d="' + d + '" class="ln ln-' + cls + '"' + (mk ? ' marker-end="url(#mk-' + mk + ')"' : '') + '/>');
+  }
+  function link(fa, ta, mode, t) {
+    var f = byId[fa], g = byId[ta], d;
+    if (mode === 'v') d = 'M' + f.cx + ' ' + (f.y + BH) + 'V' + g.y;
+    else if (mode === 'vh') d = 'M' + f.cx + ' ' + (f.y + BH) + 'V' + g.cy + 'H' + g.x;
+    else if (mode === 'left') d = 'M' + f.x + ' ' + f.cy + 'H' + (g.x + BW);
+    else if (f.cy === g.cy) d = 'M' + (f.x + BW) + ' ' + f.cy + 'H' + g.x;
+    else d = 'M' + (f.x + BW) + ' ' + f.cy + 'H' + x0(g.col) + 'V' + g.cy + 'H' + g.x;
+    path(d, t, t);
+  }
+  [
+    ['sc', 'sv', 'v', 'a'], ['sc', 'sf', 'hv', 'a'], ['sv', 'cta', 'hv', 'a'], ['cta', 'dc', 'vh', 'a'],
+    ['ld', 'la', 'hv', 'a'], ['la', 'rs', 'v', 'r'], ['rs', 'cta', 'left', 'r'],
+    ['cc', 'ccl', 'v', 'a'], ['ccl', 'chc', 'hv', 'a'], ['ccl', 'pr', 'hv', 'a'],
+    ['pr', 'ps', 'v', 'a'], ['mf', 'ma', 'v', 'a'],
+    ['rd', 'ds', 'hv', 's'], ['ds', 'crr', 'hv', 'a'], ['crr', 'cg', 'v', 'a']
+  ].forEach(function (l) { link(l[0], l[1], l[2], l[3]); });
+
+  // gate: four feeders join one bus into DeclarationReadyForSubmission
+  var feeders = [
+    ['chc', 'a', 'charges ready · async', 'lab'],
+    ['ps', 's', 'permits approved · sync', 'lab-s'],
+    ['cok', 's', 'compliance current · sync', 'lab-s'],
+    ['mf', 's', 'manifest valid · sync', 'lab-s']
+  ];
+  feeders.forEach(function (f) {
+    var e = byId[f[0]];
+    path('M' + (e.x + BW) + ' ' + e.cy + 'H' + gateX, f[1]);
+    out.push('<circle cx="' + gateX + '" cy="' + e.cy + '" r="3.5" class="dot"/>');
+    out.push('<text x="' + (x0(5) + CW / 2) + '" y="' + (e.cy - 6) + '" text-anchor="middle" class="' + f[3] + '">' + f[2] + '</text>');
+  });
+  var rd = byId.rd, mfe = byId.mf;
+  path('M' + gateX + ' ' + mfe.cy + 'V' + rd.cy + 'H' + rd.x, 'g', 'g');
+  out.push('<text x="' + (gateX + 9) + '" y="' + (byId.cc.cy - 2) + '" class="lab-g">submission gate</text>');
+  out.push('<text x="' + (gateX + 9) + '" y="' + (byId.cc.cy + 11) + '" class="lab">all four must pass</text>');
+
+  // other labels
+  out.push('<text x="' + (byId.la.cx + 9) + '" y="' + (byId.la.y + BH + 22) + '" class="lab-r">each arrival re-triggers segregation</text>');
+  out.push('<text x="' + x0(3) + '" y="' + (byId.rs.cy - 7) + '" text-anchor="middle" class="lab-r">re-evaluates clearance type</text>');
+  out.push('<text x="' + (x0(8) - 8) + '" y="' + (byId.pr.cy) + '" text-anchor="end" class="lab">ICEGATE responds · async</text>');
+  out.push('<text x="' + (x0(6) + CW / 2) + '" y="' + (byId.rd.y - 0 + BH + 18) + '" text-anchor="middle" class="lab-s">direct call, ICEGATE ack</text>');
+
+  // event boxes (drawn last, on top of lines)
+  E.forEach(function (e) {
+    var o = byId[e[0]], lines = split(o.name), t = o.kind === 'alt' ? 'alt' : 'ev';
+    out.push('<rect x="' + o.x + '" y="' + o.y + '" width="' + BW + '" height="' + BH + '" rx="3" class="' + t + '"/>');
+    if (lines.length === 1) {
+      out.push('<text x="' + o.cx + '" y="' + (o.y + 20) + '" class="' + t + '-text">' + lines[0] + '</text>');
+    } else {
+      out.push('<text x="' + o.cx + '" y="' + (o.y + 14) + '" class="' + t + '-text">' + lines[0] + '</text>');
+      out.push('<text x="' + o.cx + '" y="' + (o.y + 26) + '" class="' + t + '-text">' + lines[1] + '</text>');
+    }
+  });
+
+  var svg = document.getElementById('diagram');
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.innerHTML = out.join('').replace('<svg-viewbox-placeholder/>', '');
+})();
+</script>
+</body>
+</html>
