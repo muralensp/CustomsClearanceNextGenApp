@@ -23,6 +23,10 @@ storage:
     wal:
       path: /tmp/tempo/wal
 
-compactor:
-  compaction:
-    block_retention: 24h
+# Tempo 3 removed the `compactor` block (compaction and retention now run in
+# the backend scheduler/worker, which the single-binary target includes).
+# Block retention moved to the per-tenant overrides defaults.
+overrides:
+  defaults:
+    compaction:
+      block_retention: 24h
