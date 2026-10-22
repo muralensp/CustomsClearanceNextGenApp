@@ -51,3 +51,7 @@ Consistent with every prior day: no CI step was wired around a command that hadn
 ## Related
 
 [[ADR-0005]] (CI platform strategy — all three new/changed scripts kept in lockstep across `ci.yml` and `azure-pipelines.yml`). [[ADR-0007]] (coverage gate policy — why integration/contract layers are deliberately excluded from it). [[ADR-0008]] (the docker-compose dev environment the contract test layer runs against). Day 7 (OpenAPI stubs the Postman collection should grow to mirror).
+
+## Amendment (2026-10-22, ADR-0044)
+
+The integration layer stays infrastructure-free. Tests that need a genuine Keycloak-issued token run in a separate **identity E2E** CI job with its own compose profile. The fast layer uses test-signed JWTs in the same shape as Keycloak's, and a contract test pins that shape against a token captured from the real realm.

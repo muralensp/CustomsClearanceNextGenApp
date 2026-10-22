@@ -109,3 +109,35 @@ real compose stack (slot 1) on 2026-10-18/19.
 - CI changes, made afterwards on Day 43: secrets scanning (2.7) and failing the build on a vulnerable
   package (7.9).
 - Everything under 3 and 4 is a production requirement that depends on the hosting decision.
+
+## Phase 1 revision (2026-10-22, documentation only; nothing below is built yet)
+
+Decisions: ADR-0043 (tenancy), ADR-0044 (identity), ADR-0045 (authorization), ADR-0047 (hosting), ADR-0048
+(audit retention and personal data). "Planned" means designed and accepted, not implemented or verified.
+
+| # | Phase 1 status | What changes |
+|---|---|---|
+| 1.2 | Planned closure | Keycloak handles credentials; timing leak applies only to the dev login, which is off in production (ADR-0044 decision 8). |
+| 1.6 | Planned closure | Refresh and token lifetime move to Keycloak. `Jwt:AccessTokenMinutes` stays for the dev login. |
+| 1.7 | Planned closure | Lockout and throttling come from Keycloak brute-force detection. Still an accepted gap until then. |
+| 1.8 | Decided | MFA mandatory for every human production user, no SMS, admin-mediated recovery (ADR-0044). Open until built. |
+| 1.9 | Extend | Add: dev personas seeded only in Development or CI; production startup guard (new test). |
+| 1.10 | Unchanged | Service-to-service auth still a gap; Keycloak service accounts cover future machine clients. |
+| 2.1 | Extend | Add: in-house signing key must not be trusted in the Keycloak profile; test that an in-house-signed token is rejected. |
+| 2.4, 2.6 | Open | Wait for the hosting choice; deadline set in ADR-0047. |
+| 3.x, 4.1 | Open | Production requirements fixed in ADR-0047; unbuilt until the cloud is chosen. |
+| 4.2 | Open | Column-level encryption designed with the Party entity (ADR-0048 decision 6). |
+| 4.4, 6.2 | Decided | Events carry a user id; address resolved at send time, nothing stored (ADR-0048 decision 5). |
+| 5.6 | Decided (provisional) | Per-tenant retention, 8-year default, date partitions; legal check by the Product Owner before production. |
+| 5.8 | Open | Still waits for the first Confidential fields. |
+| 6.4 | Decided | Platform is processor, tenant is fiduciary; requests come from the tenant admin (ADR-0048). Legal check pending. |
+| 7.3 | Open | Needs TLS (hosting) and the UI choice. |
+| 7.12 | Open | Phase 8; ICES specification action added to Phase 1 (ADR-0049). |
+| NEW 8.1 | Planned | Tenant isolation: `TenantId` and RLS on every tenant-owned table; test fails when one lacks them (ADR-0043). |
+| NEW 8.2 | Planned | Pooled-connection leak test; `SET LOCAL` only (ADR-0043). |
+| NEW 8.3 | Planned | Event envelope `TenantId` mandatory; dead-letter on missing tenant (ADR-0043). |
+| NEW 8.4 | Planned | No just-in-time user creation; suspended user blocked immediately (ADR-0044). |
+| NEW 8.5 | Planned | Mandatory platform rules cannot be overridden by a tenant (ADR-0046). |
+| NEW 8.6 | Planned | Tenant is never a Prometheus label (ADR-0043). |
+| NEW 8.7 | Known gap | Single platform admin and single approver; recovery for tenant admins has no second person (ADR-0044). |
+| NEW 8.8 | Planned | Live ICEGATE filing disabled for rows only PO-verified (ADR-0049). |

@@ -1,6 +1,6 @@
-# Phase 1 Kickoff Brief — Enterprise Core (DRAFT for Product Owner review)
+# Phase 1 Kickoff Brief — Enterprise Core (decisions taken 2026-10-22; see `docs/PHASE1-DECISIONS.md`)
 
-Prepared on Day 49 (2026-10-19). Status: **draft**. It states what Phase 1 is, what already exists, and the
+Prepared on Day 49 (2026-10-19). Status: **decisions 1-5 and 8 taken on 2026-10-22** in a Product Owner interview (ADR-0043 to ADR-0049); sections below are kept as written on Day 49. Decisions 6-7 are unchanged (India only; ICEGATE unconfirmed until the ICES specification is obtained). It states what Phase 1 is, what already exists, and the
 decisions needed before work starts. Items marked **Proposal** are my recommendations, not decisions.
 Sources: `CustomsClearance_Phasewise_DevlopmentPlan_v2.docx` (section 2.3), PRD chapters 16, 20 and 21,
 ADR-0017/0031/0032/0030/0036/0041/0042, `docs/security/PHASE0_SECURITY_CHECKLIST.md`, and the Day 46-48 logs.
