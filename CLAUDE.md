@@ -138,7 +138,7 @@ One line per day; detail is in `Phase-1_Architecture_Engineering_Prep/DayNN_Exec
 
 ## Status
 
-Days 1-50 complete and merged to `main`. **Phase 0 closed as GO** (Product Owner, 2026-10-19). Phase 1 not started — wait for explicit instruction; first settle tenancy and identity source (`docs/PHASE1-KICKOFF-BRIEF.md`).
+Days 1-50 complete and merged to `main`. **Phase 0 closed as GO** (Product Owner, 2026-10-19). Phase 1 not started — wait for explicit instruction. Phase 1 decisions taken 2026-10-22 (multi-tenant, Keycloak, build order) are documented in ADR-0043 to 0049 and `docs/PHASE1-DECISIONS.md` (docs branch, not yet merged).
 Phase 0 follow-ups (`Phase0_Followups_Log.md`): script `trap` ordering and rules-admin audit done (E2E now 21 checks); `WORK-ITEMS.md` waits for Phase 1 work items.
 Dependabot: #14 (Tempo 3.1.0) is superseded by the Tempo 3 migration PR (`tempo.yaml` retention moved to `overrides.defaults.compaction.block_retention`); no other Dependabot PRs open.
 Known open items: `docs/security/PHASE0_SECURITY_CHECKLIST.md` (recipient address in notification event

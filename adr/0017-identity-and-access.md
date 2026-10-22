@@ -1,6 +1,6 @@
 # ADR-0017: Identity & Access (Day 23)
 
-**Status:** Accepted
+**Status:** Accepted (dev/CI only; superseded for production by ADR-0044)
 **Date:** 2026-09-15
 **Deciders:** User (Product Owner / Implementer), Claude (design/build support)
 
