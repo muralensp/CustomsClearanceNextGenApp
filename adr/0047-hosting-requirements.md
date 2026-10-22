@@ -20,7 +20,8 @@ ADR-0048 legal check). The Azure DevOps YAML has never run anywhere.
      (`SSL Mode=VerifyFull`).
    - A secrets store; the app reads production credentials from it, never from files in the image.
    - TLS 1.2+ at the edge with HSTS; TLS or mTLS between internal hops.
-   - A container runtime; no provider-specific code in the application.
+   - A container runtime; no provider-specific code in the application. Whether this means Kubernetes is decided with the
+     cloud choice (the original Phase 0 listed Kubernetes; Phase 0 closed on Docker Compose only).
    - Backups encrypted, restore tested.
 3. **Deadline.** The cloud must be chosen **before the security-hardening milestone** and before any real customer
    data exists. At that point ADR-0008's Staging and Production rows are revised and PLAT-002 closes.
