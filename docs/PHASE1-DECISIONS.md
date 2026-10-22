@@ -35,9 +35,9 @@ below was a Claude recommendation that the Product Owner accepted; the ADR holds
   Notification hardening (tenant-aware, per-user preferences, templates, retry, recipient-address fix), audit
   retention design, configuration layering, gateway BFF, UI last. Tariff sourcing runs alongside as research and
   procurement.
-- **Deferred, deliberately:** task management, SLAs, escalation, collaboration and work queues (PRD ch. 16). They need
-  a real workflow to be tested against and Phase 1 has none; they move to the first phase that does. This is an
-  explicit scope change from the plan, not forgotten work.
+- **Deferred, deliberately:** task management, SLAs, escalation, collaboration and work queues (PRD ch. 16). In the
+  original plan these are **Phase 5 (Workflow Platform)** modules, and Phase 1 has no workflow to test them against.
+  The brief's gap table had listed them under Phase 1; that was an inference, corrected on 2026-10-22.
 - **Corrections to the brief:** the rules-admin audit gap and the script `trap` ordering were closed in the Phase 0
   follow-ups (CLAUDE.md). Only restarting `docs/WORK-ITEMS.md` remained and is done in this branch.
 
@@ -59,6 +59,14 @@ Each step passes Gate 1 and Gate 2 and goes through the PR flow. No code starts 
 - Collect tariff data vendor quotes against the ceiling.
 - Choose the cloud before the security-hardening milestone.
 - Confirm facts marked unverified in the ADRs (Keycloak Organizations support in the pinned version; ICEGATE signing rules).
+
+## Added 2026-10-22 (after reading the original plan)
+
+- India confirmed as the MVP jurisdiction. The Phase 1 sourcing workstream produces a decision document for tariff,
+  exchange rates and lookup tables; the loader and real ingestion are Phase 2.
+- Two-day backend system-test stage before hardening and UI; Phase 1 sign-off is Day 107.
+- Kubernetes deferred to the cloud choice (due Day 70). Timeline measured, not promised (re-based at the Day 61 re-plan).
+- Details: `docs/PHASE1-DAYWISE-PLAN.md`, Reconciliation section.
 
 ## Not grilled
 

@@ -27,7 +27,9 @@ broker systems preparing declarations in-product and transmitting to ICES are ge
    ceiling of about **INR 1,00,000 per year** (a ballpark; commercial feeds probably cost more, unverified, no quotes
    seen). Collect vendor quotes and redistribution terms in parallel. FTA/preferential rates are out of Phase 1
    unless a pilot customer needs them. Jurisdiction: India only.
-5. Effective dating on every tariff row, a repeatable load process, and awareness that HS 2028 forces a re-mapping
+5. **Scope of the Phase 1 sourcing workstream** (original plan section 2.3): a decision document for three data sets,
+   ITC-HS tariff, exchange rates and lookup tables. The loader and real ingestion are Phase 2 (Day 88 of the day-wise plan).
+6. Effective dating on every tariff row, a repeatable load process, and awareness that HS 2028 forces a re-mapping
    (from ADR-0042) carry over.
 
 ## Alternatives Considered
