@@ -137,7 +137,7 @@ services:
       - "${MAILPIT_UI_PORT:-8025}:8025"
 
   rabbitmq:
-    image: rabbitmq:3.13-management-alpine
+    image: rabbitmq:4.4-management-alpine
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
