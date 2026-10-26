@@ -25,11 +25,11 @@
          1.15.3-beta.1, every histogram (http_server_request_duration_seconds_*) silently vanished while CI stayed green. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.0" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.20.1" />
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.20.0-beta.1" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
   </ItemGroup>
 
   <!-- Day 28 - CorrelationIdMiddleware.HeaderName, to tag every trace span
