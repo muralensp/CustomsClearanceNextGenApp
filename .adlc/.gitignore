@@ -1,0 +1,4 @@
+# ADLC keeps its settings in git and its run state out of it.
+*
+!.gitignore
+!config.yaml
