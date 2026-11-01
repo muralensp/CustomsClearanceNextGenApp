@@ -145,3 +145,7 @@ Known open items: `docs/security/PHASE0_SECURITY_CHECKLIST.md` (recipient addres
 payload, no TLS/security headers/login lockout, MFA/retention/DPDPA decisions); tariff sourcing decision
 (ADR-0042); Azure DevOps YAML never run anywhere; cross-bounded-context `ProjectReference` check is
 still manual (ADR-0006 follow-up) and should be automated before Phase 3 context work.
+
+## ADLC
+
+Work items here are carried out by ADLC: its settings are in `.adlc/config.yaml` and the task briefs in `docs/work-items/`. <!-- adlc:init -->
