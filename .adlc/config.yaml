@@ -41,3 +41,9 @@ methods:
     resume:
       skill: handoff
       sha256: 4bb7762cbf0cb3310fb7f23ebdea4523e0f3dbab287b3e60a827317084440ab5
+
+models:                       # the Reviewer must differ from the Coder (PRD FR-22)
+  tester: claude-sonnet-5-5
+  coder: claude-sonnet-5-5
+  reviewer: claude-opus-5-5
+  pr_writer: claude-haiku-5-5
