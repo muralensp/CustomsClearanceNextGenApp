@@ -13,5 +13,6 @@ requires_approval: false
 **Acceptance criteria:**
 - `ErrorMapper.Map` returns status 404, type `https://api.customsclearance.india/errors/not-found` and title `The requested resource was not found` for a `NotFoundException`
 - The response carries the instance path and the correlation id, and `Errors` is null
+- The response's `Detail` carries the exception message, and a test asserts it
 - Unit tests in `tests/Unit/Platform.ErrorHandling.Tests/` cover the new case, and the existing tests still pass
 - Only files under `src/Platform/ErrorHandling/` and `tests/Unit/Platform.ErrorHandling.Tests/` change
