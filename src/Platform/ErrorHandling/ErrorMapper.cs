@@ -12,6 +12,7 @@ public static class ErrorMapper
 {
     private const string _validationFailedType = "https://api.customsclearance.india/errors/validation-failed";
     private const string _malformedRequestType = "https://api.customsclearance.india/errors/malformed-request";
+    private const string _notFoundType = "https://api.customsclearance.india/errors/not-found";
     private const string _unexpectedErrorType = "https://api.customsclearance.india/errors/unexpected";
 
     public static ProblemDetailsResponse Map(Exception exception, string? instancePath, string? correlationId)
@@ -52,6 +53,18 @@ public static class ErrorMapper
                 Errors: null);
         }
 
+        if (exception is NotFoundException notFoundEx)
+        {
+            return new ProblemDetailsResponse(
+                Type: _notFoundType,
+                Title: "The requested resource was not found",
+                Status: StatusCodes.NotFound,
+                Detail: notFoundEx.Message,
+                Instance: instancePath,
+                CorrelationId: correlationId,
+                Errors: null);
+        }
+
         // Unknown/unhandled exceptions never leak internal details (stack
         // traces, exception type names, connection strings, etc.) into the
         // response, per Day10_Security_Audit_Standards_v1.0.docx Section 11
@@ -73,6 +86,7 @@ public static class ErrorMapper
 internal static class StatusCodes
 {
     public const int BadRequest = 400;
+    public const int NotFound = 404;
     public const int UnprocessableEntity = 422;
     public const int InternalServerError = 500;
 }

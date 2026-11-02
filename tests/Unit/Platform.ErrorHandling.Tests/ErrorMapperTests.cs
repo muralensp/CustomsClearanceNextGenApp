@@ -56,6 +56,22 @@ public class ErrorMapperTests
     }
 
     [Fact]
+    public void Map_NotFoundException_ReturnsNotFoundProblemWithDetailAndNoErrors()
+    {
+        var exception = new NotFoundException("Shipment 123 was not found.");
+
+        var result = ErrorMapper.Map(exception, "/api/v1/shipments/123", "corr-4");
+
+        Assert.Equal(404, result.Status);
+        Assert.Equal("https://api.customsclearance.india/errors/not-found", result.Type);
+        Assert.Equal("The requested resource was not found", result.Title);
+        Assert.Equal("Shipment 123 was not found.", result.Detail);
+        Assert.Equal("/api/v1/shipments/123", result.Instance);
+        Assert.Equal("corr-4", result.CorrelationId);
+        Assert.Null(result.Errors);
+    }
+
+    [Fact]
     public void Map_UnknownException_ReturnsInternalServerErrorWithoutLeakingDetail()
     {
         var exception = new InvalidOperationException("Connection string: Server=prod-db;Password=secret123");
