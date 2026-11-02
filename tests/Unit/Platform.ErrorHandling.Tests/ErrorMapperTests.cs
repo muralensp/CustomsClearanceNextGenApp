@@ -72,6 +72,22 @@ public class ErrorMapperTests
     }
 
     [Fact]
+    public void Map_ConflictException_ReturnsConflictProblemWithDetailAndNoErrors()
+    {
+        var exception = new ConflictException("Shipment 123 already exists.");
+
+        var result = ErrorMapper.Map(exception, "/api/v1/shipments", "corr-5");
+
+        Assert.Equal(409, result.Status);
+        Assert.Equal("https://api.customsclearance.india/errors/conflict", result.Type);
+        Assert.Equal("The request conflicts with the current state of the resource", result.Title);
+        Assert.Equal("Shipment 123 already exists.", result.Detail);
+        Assert.Equal("/api/v1/shipments", result.Instance);
+        Assert.Equal("corr-5", result.CorrelationId);
+        Assert.Null(result.Errors);
+    }
+
+    [Fact]
     public void Map_UnknownException_ReturnsInternalServerErrorWithoutLeakingDetail()
     {
         var exception = new InvalidOperationException("Connection string: Server=prod-db;Password=secret123");
